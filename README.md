@@ -18,6 +18,11 @@ The WMTS mbtiles-server project is no longer maintained, however the need still 
 
 Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpoints that reads from mbtiles sqlite database files. This is part of a FOSS4G toolchain to enable publishing geospatial data to the web.
 
+## TODO
+
+- [ ] Recreate Licking Tiles
+- [ ] Recreate Pickaway Tiles
+
 ## Goals
 
 - [ ] Enhance the tile server raster endpoints to serve enhanced imagery at `z*2` levels beyond that of the native `maxzoom`.
