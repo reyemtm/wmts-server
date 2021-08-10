@@ -4,7 +4,8 @@ const fastify = require('fastify')
 const tiletype = require('@mapbox/tiletype')
 const path = require('path')
 const DB = require("better-sqlite3")
-
+const tilebelt = require("@mapbox/tilebelt")
+const sharp = require("sharp")
 /*CONFIG*/
 const TILESDIR = process.env.TILESDIR || "data" // directory to read mbtiles files
 const HOST = process.env.HOST || 'localhost' // default listen address
@@ -271,8 +272,98 @@ function build(opts={}) {
     }
   }
 
-  function dbGetTile(db, tile, reply) {
-    // app.log.error(tile)
+  class OverZoom {
+    constructor() {
+    }
+    GetParentTile = (tile) => {
+      const bbox = globalMercator.tileToBBox([tile[1], tile[2], tile[0]]);
+      const center = globalMercator.bboxToCenter(bbox);
+      const parentTile = globalMercator.pointToTile(center, tile[0] - 1)
+      return parentTile
+    }
+    ExpandTile = (parentTile) => {
+      return expandedTile
+    }
+    EnhanceTile = (exapndedTile) => {
+      return enhancedTile
+    }
+    SplitTile = (enhancedTile) => {
+      return splitTile
+    }
+    ToTile = (tile) => {
+      return [tile[2], tile[0], tile[1]]
+    }
+  }
+
+  const overZoom = new OverZoom()
+
+  function dbGetTile(db, t, reply) {
+    const tile = [Number(t[0]), Number(t[1]), Number(t[2])]
+    if (tile[0] > 18) {
+    try {       
+      const getMaxZoom = db.prepare(`SELECT name, value FROM metadata where name = 'maxzoom'`);
+      const maxzoom = getMaxZoom.all();
+      if (maxzoom && maxzoom[0].value) {
+        const z = Number(maxzoom[0].value) + 1
+        if ((z - tile[0]) < 2) {
+          app.log.error("Attempting enable overzoom: " + (z - tile[0]))
+          const parentTile = (!z - tile[0]) ? tilebelt.getParent([tile[1], tile[2], tile[0]]) : tilebelt.parentTile(tilebelt.getParent([tile[1], tile[2], tile[0]]))
+          try {
+            const parentTileStmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
+            const row = parentTileStmt.get(overZoom.ToTile(parentTile))
+            if (row) {
+              return sharp(row.tile_data)
+              .resize(512,512, {
+                kernel: sharp.kernel.lanczos3
+              })
+              // .sharpen(1)
+              .toBuffer()
+              .then(data => {
+                const children = tilebelt.getChildren(parentTile)
+                const child = [];
+                children.forEach((c,i) => {
+                  const ct = overZoom.ToTile(c)
+                  if(ct[1] === tile[1] && ct[2] === tile[2]) child.push(i)
+                })
+                const tileClipMatrix = [
+                  {left: 0, top: 256}, {left: 256, top: 256}, {left: 256, top: 0}, {left: 0, top:0}
+                ]
+                return sharp(data)
+                .extract({
+                  left: tileClipMatrix[child].left,
+                  top: tileClipMatrix[child].top,
+                  // left: 0,
+                  // top: 256,
+                  width: 256,
+                  height: 256
+                })
+                .toBuffer()
+                .then(childData => {
+                  Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
+                    reply.header(h[0], h[1])
+                  )
+                  reply.header("X-Powered-By", "OverZoom Beta")
+                  reply.send(childData)
+                })            
+              })
+              .catch(err => {
+                app.log.error(err)
+                reply.code(204).send()
+              })
+            }
+          }catch(err) {
+            app.log.error(err)
+            reply.code(204).send()
+          }
+          //overzoom.ExpandTile
+          //overzoom.EnhanceTile
+          //overzoom.SplitTile
+        }
+      }
+    }catch(err) {
+      app.log.error(err)
+      reply.code(204).send()
+    }}
     try {
       const stmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
       const row = stmt.get(tile)
