@@ -10,7 +10,7 @@ This project is based on previous work from the following:
 
 ## Why
 
-The WMTS mbtiles-server project is no longer maintained, however the need still exists for a modern WMTS tile server. While working on bringing this functionality to the GO project above, the language barrier was steeper than anticipated so in the meantime I have created a working WMTS tile server for NodeJS from the examples above.
+The WMTS mbtiles-server project is no longer maintained, however the need still exists for a modern WMTS tile server. While working on bringing this functionality to the GO project above, the language barrier was steeper than anticipated so in the meantime I have pieced together a working WMTS tile server for NodeJS.
 
 > This is a work in progress and all routes and functions may be changed.
 
@@ -35,7 +35,7 @@ Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpo
   "name": "name must match the file name, without the extension",
   "format": "jpg | png | jpeg", //pbf and grid are not tested
   "minzoom": 0, //min zoom of the tiles,
-  "maxzoom": 21, //max zoom of the tiles, 2x overzoom will be enabled on any tiles with a maxzoom > 16
+  "maxzoom": 21, //max zoom of the tiles, 2x overzoom enabled on any tiles with a maxzoom > 16
   "bounds": [
     -82.85133361816406,
     39.55064761909319,
@@ -56,34 +56,38 @@ Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpo
 
 ## Goals
 
-- [X] Enhance the tile server raster endpoints to serve enhanced imagery at `z*2` levels beyond that of the native `maxzoom`.
 - [ ] Migrate the WMTS endpoints over to the GO project above.
+- [X] Enhance the tile server raster endpoints to serve enhanced imagery at `z*2` levels beyond that of the native `maxzoom`.
 
 ---
 
-## XYZ Routes Inherited from mbtiles-server (Fastify)
+## Routes
 
 ### List Available Tile Sets
 
 ```text
-http://localhost:3000/list
+http://localhost:3000/
 ```
-
-### Show Available Meta for Tile Set
-
-```text
-http://localhost:3000/[mbtiles file]/meta
-```
-
-Ex: http://localhost:3000/tiles.mbtiles/meta
 
 ### Fetch a Tile
 
 ```text
-http://localhost:3000/[mbtiles file]/[z]/[x]/[y]
+http://localhost:3000/[mbtiles file]/[z]/[x]/[y].ext //extension is optional
 ```
 
-Ex: http://localhost:3000/tiles.mbtiles/12/1128/1620
+### Tilejson
+
+```text
+http://localhost:3000/[mbtiles file]/tilejson //extension is optional
+```
+
+### WMTS
+
+```text
+http://localhost:3000/[mbtiles file]/WMTS //extension is optional
+```
+
+Ex: http://localhost:3000/tiles.mbtiles/12/1128/1620.png
 
 ## Notes inherited from mbtiles-server (Fastify)
 
