@@ -9,7 +9,7 @@ const server = require("./app")({
     level: LOG_LEVEL
   },
   ignoreTrailingSlash: true,
-  keepAliveTimeout: process.env.KEEPALIVE || 7200
+  keepAliveTimeout: process.env.KEEPALIVE || 1000*60*60*2
 })
 
 server.listen(LOCAL_PORT, (err) => {

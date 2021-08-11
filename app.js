@@ -79,12 +79,11 @@ function build(opts = {}) {
       const db = dbConnector(TILESDIR, database)
       if (!db) throw new Error("Could not connect to database")
       const metadata = dbGetMetadata(db, reply)
-      if (metadata) {
-        return reply.send(metadata)
-      }else{
+      if (!metadata) {
         throw new Error("No metadata found.")
       }
-    } catch (err) {
+      return reply.send(metadata)
+    }catch (err) {
       app.log.error("Tilejson Error: " + err)
       return reply.code(404).send(err)
     }
@@ -248,10 +247,8 @@ function build(opts = {}) {
         return reply.send(xml)
       }
     } catch (err) {
-      if (err) {
-        app.log.error("mbtilesMedataToXML Error: " + err)
-        reply.code(500).send('Error fetching metadata: ' + err + '\n')
-      }
+      app.log.error("mbtilesMedataToXML Error: " + err)
+      reply.code(500).send('Error fetching metadata: ' + err + '\n')
     }
   }
 
@@ -282,7 +279,7 @@ function build(opts = {}) {
 
   function dbConnector(dir, database) {
     try {
-      if (!fs.existsSync(path.join(dir, database))) throw new Error("database dooes not exist.")
+      if (!fs.existsSync(path.join(dir, database))) throw new Error("database does not exist.")
       const connection = new DB(path.join(dir, database), {
         readonly: true,
         fileMustExist: true
@@ -290,7 +287,7 @@ function build(opts = {}) {
       return connection
     } catch (err) {
       app.log.error("dbConnector error: " + err)
-      if (err) return false
+      return false
     }
   }
 
@@ -459,20 +456,17 @@ function build(opts = {}) {
     try {
       const stmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
       const row = stmt.get(tile)
-      if (row) {
-        Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
-          reply.header(h[0], h[1])
-        )
-        reply.send(row.tile_data)
-      } else {
+      if (!row) {
         app.log.error("getTileError, no data found: ")
         reply.code(204).send() //change to sending blank png tile?
       }
+      Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
+        reply.header(h[0], h[1])
+      )
+      reply.send(row.tile_data)
     } catch (err) {
-      if (err) {
-        app.log.error("getTileError, unknown: " + err)
-        reply.code(500).send(err) //TODO merge these routes with the original WMTS error handlers //TODO check all error status codes
-      }
+      app.log.error("getTileError, unknown: " + err)
+      reply.code(500).send(err) //TODO merge these routes with the original WMTS error handlers //TODO check all error status codes
     }
   }
 
@@ -482,29 +476,29 @@ function build(opts = {}) {
       const rows = stmt.all()
       if (!rows) {
         return null
-      } else {
-        const metadata = {};
-        let format, name;
-        rows.forEach(r => {
-          if (r.name === "format") format = r.value
-          if (r.name === "name") name = r.value
-          let value = (isNaN(r.value)) ? r.value : Number(r.value);
-          if (r.value.split(",").length > 1) {
-            const array = r.value.split(",")
-            value = array.reduce((i, v) => [...i, Number(v)], [])
-          }
-          metadata[r.name] = value
-        })
-        metadata.maxzoom = metadata.maxzoom
-        metadata["scheme"] = "xyz"
-        metadata["tilejson"] = "2.1.0"
-        metadata["type"] = "overlay"
-        metadata["version"] = "1.1"
-        metadata["tiles"] = [
-          `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${name}/{z}/{x}/{y}.${format}`
-        ]
-        return metadata
       }
+      const metadata = {};
+      let format, name;
+      rows.forEach(r => {
+        if (r.name === "format") format = r.value
+        if (r.name === "name") name = r.value
+        let value = (isNaN(r.value)) ? r.value : Number(r.value);
+        if (r.value.split(",").length > 1) {
+          const array = r.value.split(",")
+          value = array.reduce((i, v) => [...i, Number(v)], [])
+        }
+        metadata[r.name] = value
+      })
+      metadata.maxzoom = metadata.maxzoom
+      metadata["scheme"] = "xyz"
+      metadata["tilejson"] = "2.1.0"
+      metadata["type"] = "overlay"
+      metadata["version"] = "1.1"
+      metadata["tiles"] = [
+        `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${name}/{z}/{x}/{y}.${format}`
+      ]
+      return metadata
+
     } catch (err) {
       app.log.error("getMetadata error: " + err)
       throw new Error("metadata error")
