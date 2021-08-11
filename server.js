@@ -6,7 +6,7 @@ const server = require("./app")({
   logger: {
     enable: false,
     prettyPrint: true,
-    level: "error"
+    level: "warn"
   },
   ignoreTrailingSlash: true,
   keepAliveTimeout: process.env.KEEPALIVE || 7200

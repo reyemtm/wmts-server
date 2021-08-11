@@ -76,7 +76,6 @@ function build(opts={}) {
 
   // MBtiles meta route
   app.get('/:database/tilejson', (request, reply) => {
-    //TODO make this actual tilejson spec
     const database = dbNormalize(request.params.database)
     try {
       const db = dbConnector(TILESDIR, database)
@@ -299,15 +298,46 @@ function build(opts={}) {
 
   function dbGetTile(db, t, reply) {
     const tile = [Number(t[0]), Number(t[1]), Number(t[2])]
-    if (tile[0] > 18) {
+
+    //TODO make this a fn of max zoom native maxzoom
+    if (tile[0] > 20) {
     try {       
       const getMaxZoom = db.prepare(`SELECT name, value FROM metadata where name = 'maxzoom'`);
       const maxzoom = getMaxZoom.all();
-      if (maxzoom && maxzoom[0].value) {
-        const z = Number(maxzoom[0].value) + 1
-        if ((z - tile[0]) < 2) {
-          app.log.error("Attempting enable overzoom: " + (z - tile[0]))
-          const parentTile = (!z - tile[0]) ? tilebelt.getParent([tile[1], tile[2], tile[0]]) : tilebelt.parentTile(tilebelt.getParent([tile[1], tile[2], tile[0]]))
+      if (maxzoom && maxzoom[0].value && Number(maxzoom[0].value) >= 19 ) {
+        const z = Number(maxzoom[0].value)
+        const zF = tile[0] - z;
+        if (zF < 3) {
+
+          app.log.warn("Attempting enable overzoom: " + zF)
+          const parentTile = (zF === 1) 
+            ? tilebelt.getParent([tile[1], tile[2], tile[0]])
+            : tilebelt.getParent(tilebelt.getParent([tile[1], tile[2], tile[0]]))
+          // const parentTile = tilebelt.getParent([tile[1], tile[2], tile[0]])
+          // const grandparentTile = tilebelt.getParent(parentTile)
+
+          //works for first order children
+          const children = tilebelt.getChildren(tilebelt.getParent([tile[1], tile[2], tile[0]]))
+          const child = [];
+          children.forEach((c,i) => {
+            const ct = overZoom.ToTile(c)
+            if(ct[1] === tile[1] && ct[2] === tile[2]) child.push(i)
+          });
+          const tileClipMatrix = [
+            {left: 0, top: 256}, {left: 256, top: 256}, {left: 256, top: 0}, {left: 0, top:0}
+          ]
+          let _child = 0;
+          if (zF === 2) {
+            //children of the grandparent tile
+            const _children = tilebelt.getChildren(parentTile);
+            //parent of the child that we need from above
+            const _parentTile = tilebelt.getParent(children[child[0]]);
+            //child of the parent tile that we need to split in oder to get the actual tile that is being requested
+            _children.forEach((c,i) => {
+              if(c[1] === _parentTile[1] && _parentTile[2] === tile[2]) _child = i
+            });
+          }
+
           try {
             const parentTileStmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
             const row = parentTileStmt.get(overZoom.ToTile(parentTile))
@@ -319,21 +349,16 @@ function build(opts={}) {
               // .sharpen(1)
               .toBuffer()
               .then(data => {
-                const children = tilebelt.getChildren(parentTile)
-                const child = [];
-                children.forEach((c,i) => {
-                  const ct = overZoom.ToTile(c)
-                  if(ct[1] === tile[1] && ct[2] === tile[2]) child.push(i)
-                })
-                const tileClipMatrix = [
-                  {left: 0, top: 256}, {left: 256, top: 256}, {left: 256, top: 0}, {left: 0, top:0}
-                ]
                 return sharp(data)
+                .extract({
+                  left: (zF > 1) ? tileClipMatrix[_child].left : 0,
+                  top: (zF > 1) ? tileClipMatrix[_child].top : 0,
+                  width: (zF > 1) ? 512 : 256,
+                  height: (zF > 1) ? 512: 256
+                })
                 .extract({
                   left: tileClipMatrix[child].left,
                   top: tileClipMatrix[child].top,
-                  // left: 0,
-                  // top: 256,
                   width: 256,
                   height: 256
                 })
@@ -350,10 +375,13 @@ function build(opts={}) {
                 app.log.error(err)
                 reply.code(204).send()
               })
+            }else{
+              app.log.error("Error fetching parent tile")
+              return reply.code(500).send()
             }
           }catch(err) {
             app.log.error(err)
-            reply.code(204).send()
+            return reply.code(204).send()
           }
           //overzoom.ExpandTile
           //overzoom.EnhanceTile
@@ -362,7 +390,7 @@ function build(opts={}) {
       }
     }catch(err) {
       app.log.error(err)
-      reply.code(204).send()
+      return reply.code(204).send()
     }}
     try {
       const stmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
@@ -379,7 +407,7 @@ function build(opts={}) {
       }
     } catch (err) {
       if (err) {
-        reply.code(500).send(err) //TODO merge these routes with the original WMTS error handlers
+        reply.code(500).send(err) //TODO merge these routes with the original WMTS error handlers //TODO check all error status codes
       }
     }
   }
