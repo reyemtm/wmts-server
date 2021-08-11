@@ -38,7 +38,7 @@
       }).setView([39.713859613882306, -82.60636210441591], 22.0);
       var hash = new L.Hash(map);
       const fastify = new L.tileLayer(
-        "http://localhost:3000/ohio/{z}/{x}/{y}.png",
+        "http://localhost:3000/2020_fairfield_3in_z21/{z}/{x}/{y}.png",
         {
           minZoom: 0,
           maxZoom: 22,
@@ -128,6 +128,23 @@
           });
         });
       });
+      L.GridLayer.GridDebug = L.GridLayer.extend({
+        createTile: function (coords) {
+          const tile = document.createElement('div');
+          tile.style.outline = '1px solid red';
+          tile.style.fontWeight = 'normal';
+          tile.style.fontSize = '14pt';
+          tile.style.color = '#fff';
+          tile.innerHTML = [coords.z, coords.x, coords.y].join(' / ');
+          return tile;
+        },
+      });
+
+      L.gridLayer.gridDebug = function (opts) {
+        return new L.GridLayer.GridDebug(opts);
+      };
+
+      map.addLayer(L.gridLayer.gridDebug());
     </script>
   </body>
 </html>

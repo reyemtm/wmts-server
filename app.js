@@ -27,9 +27,11 @@ const {
   getQuery,
   invalidQuery
 } = require('./lib/utils.js')
-const { format } = require('path')
+const {
+  format
+} = require('path')
 
-function build(opts={}) {
+function build(opts = {}) {
 
   const app = fastify(opts)
 
@@ -272,8 +274,7 @@ function build(opts={}) {
   }
 
   class OverZoom {
-    constructor() {
-    }
+    constructor() {}
     GetParentTile = (tile) => {
       const bbox = globalMercator.tileToBBox([tile[1], tile[2], tile[0]]);
       const center = globalMercator.bboxToCenter(bbox);
@@ -301,97 +302,151 @@ function build(opts={}) {
 
     //TODO make this a fn of max zoom native maxzoom
     if (tile[0] > 20) {
-    try {       
-      const getMaxZoom = db.prepare(`SELECT name, value FROM metadata where name = 'maxzoom'`);
-      const maxzoom = getMaxZoom.all();
-      if (maxzoom && maxzoom[0].value && Number(maxzoom[0].value) >= 19 ) {
-        const z = Number(maxzoom[0].value)
-        const zF = tile[0] - z;
-        if (zF < 3) {
+      try {
+        const getMaxZoom = db.prepare(`SELECT name, value FROM metadata where name = 'maxzoom'`);
+        const maxzoom = getMaxZoom.all();
+        if (maxzoom && maxzoom[0].value && Number(maxzoom[0].value) >= 19) {
+          const z = Number(maxzoom[0].value)
+          app.log.warn(maxzoom[0].value)
+          const zF = tile[0] - z;
+          if (zF < 3) {
 
-          app.log.warn("Attempting enable overzoom: " + zF)
-          const parentTile = (zF === 1) 
-            ? tilebelt.getParent([tile[1], tile[2], tile[0]])
-            : tilebelt.getParent(tilebelt.getParent([tile[1], tile[2], tile[0]]))
-          // const parentTile = tilebelt.getParent([tile[1], tile[2], tile[0]])
-          // const grandparentTile = tilebelt.getParent(parentTile)
+            app.log.warn("Attempting enable overzoom: " + zF)
+            const tileClipMatrix = [{
+              left: 0,
+              top: 256
+            }, {
+              left: 256,
+              top: 256
+            }, {
+              left: 256,
+              top: 0
+            }, {
+              left: 0,
+              top: 0
+            }]
+            const originTile = (tile[0] == 21) ?
+              tilebelt.getParent([tile[1], tile[2], tile[0]]) :
+              tilebelt.getParent(tilebelt.getParent([tile[1], tile[2], tile[0]]))
 
-          //works for first order children
-          const children = tilebelt.getChildren(tilebelt.getParent([tile[1], tile[2], tile[0]]))
-          const child = [];
-          children.forEach((c,i) => {
-            const ct = overZoom.ToTile(c)
-            if(ct[1] === tile[1] && ct[2] === tile[2]) child.push(i)
-          });
-          const tileClipMatrix = [
-            {left: 0, top: 256}, {left: 256, top: 256}, {left: 256, top: 0}, {left: 0, top:0}
-          ]
-          let _child = 0;
-          if (zF === 2) {
-            //children of the grandparent tile
-            const _children = tilebelt.getChildren(parentTile);
-            //parent of the child that we need from above
-            const _parentTile = tilebelt.getParent(children[child[0]]);
-            //child of the parent tile that we need to split in oder to get the actual tile that is being requested
-            _children.forEach((c,i) => {
-              if(c[1] === _parentTile[1] && _parentTile[2] === tile[2]) _child = i
+            //works for first order children
+            //children of parent of the requested tile
+            const children = tilebelt.getChildren(tilebelt.getParent([tile[1], tile[2], tile[0]]))
+            const child = [];
+            children.forEach((c, i) => {
+              const ct = overZoom.ToTile(c)
+              if (ct[1] === tile[1] && ct[2] === tile[2]) child.push(i)
             });
-          }
 
-          try {
-            const parentTileStmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
-            const row = parentTileStmt.get(overZoom.ToTile(parentTile))
-            if (row) {
-              return sharp(row.tile_data)
-              .resize(512,512, {
-                kernel: sharp.kernel.lanczos3
-              })
-              // .sharpen(1)
-              .toBuffer()
-              .then(data => {
-                return sharp(data)
-                .extract({
-                  left: (zF > 1) ? tileClipMatrix[_child].left : 0,
-                  top: (zF > 1) ? tileClipMatrix[_child].top : 0,
-                  width: (zF > 1) ? 512 : 256,
-                  height: (zF > 1) ? 512: 256
-                })
-                .extract({
-                  left: tileClipMatrix[child].left,
-                  top: tileClipMatrix[child].top,
-                  width: 256,
-                  height: 256
-                })
-                .toBuffer()
-                .then(childData => {
-                  Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
-                    reply.header(h[0], h[1])
-                  )
-                  reply.header("X-Powered-By", "OverZoom Beta")
-                  reply.send(childData)
-                })            
-              })
-              .catch(err => {
-                app.log.error(err)
-                reply.code(204).send()
-              })
-            }else{
-              app.log.error("Error fetching parent tile")
-              return reply.code(500).send()
+            let _child = 0,
+              requestedParentTile, requestedParentSiblings;
+            if (tile[0] == 22) {
+              //parent of the child that we need from above
+              requestedParentTile = tilebelt.getParent([tile[1], tile[2], tile[0]]);
+
+              //siblings of the requestedParentTile
+              requestedParentSiblings = tilebelt.getSiblings(requestedParentTile);
+
+              //child of requestedParentTile that we need to split in oder to get the actual tile that is being requested
+              requestedParentSiblings.forEach((c, i) => {
+                const ct = overZoom.ToTile(c)
+                const rpt = overZoom.ToTile(requestedParentTile)
+                if (ct[1] === rpt[1] && ct[2] === rpt[2]) _child = i
+              });
             }
-          }catch(err) {
-            app.log.error(err)
-            return reply.code(204).send()
+
+            try {
+              const parentTileStmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
+              const row = parentTileStmt.get(overZoom.ToTile(originTile))
+              if (row) {
+                if (tile[0] == 21) {
+                  return sharp(row.tile_data)
+                    .resize(512, 512, {
+                      kernel: sharp.kernel.lanczos3
+                    })
+                    // .sharpen(1)
+                    .toBuffer()
+                    .then(data => {
+                      return sharp(data)
+                        .extract({
+                          left: tileClipMatrix[child].left,
+                          top: tileClipMatrix[child].top,
+                          width: 256,
+                          height: 256
+                        })
+                        .grayscale()
+                        .toBuffer()
+                        .then(childData => {
+                          Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
+                            reply.header(h[0], h[1])
+                          )
+                          reply.header("X-Powered-By", "OverZoom Beta")
+                          reply.send(childData)
+                        })
+                    })
+                    .catch(err => {
+                      app.log.error(err)
+                      reply.code(204).send()
+                    })
+                } else if (tile[0] == 22) {
+                  return sharp(row.tile_data)
+                    .resize(512, 512, {
+                      kernel: sharp.kernel.lanczos3
+                    })
+                    .extract({
+                      left: tileClipMatrix[_child].left,
+                      top: tileClipMatrix[_child].top,
+                      width: 256,
+                      height: 256
+                    })
+                    .toBuffer()
+                    .then(data => {
+                      // Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
+                      //   reply.header(h[0], h[1])
+                      // )
+                      // return reply.send(data)
+                      return sharp(data)
+                        .resize(512, 512, {
+                          kernel: sharp.kernel.lanczos3
+                        })
+                        .extract({
+                          left: tileClipMatrix[child].left,
+                          top: tileClipMatrix[child].top,
+                          width: 256,
+                          height: 256
+                        })
+                        .toBuffer()
+                        .then(childData => {
+                          Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
+                            reply.header(h[0], h[1])
+                          )
+                          reply.header("X-Powered-By", "OverZoom Beta")
+                          reply.send(childData)
+                        })
+                    })
+                    .catch(err => {
+                      app.log.error(err)
+                      reply.code(204).send()
+                    })
+                }
+              } else {
+                app.log.error("Error fetching parent tile")
+                return reply.code(500).send()
+              }
+            } catch (err) {
+              app.log.error(err)
+              return reply.code(204).send()
+            }
+            //overzoom.ExpandTile
+            //overzoom.EnhanceTile
+            //overzoom.SplitTile
           }
-          //overzoom.ExpandTile
-          //overzoom.EnhanceTile
-          //overzoom.SplitTile
         }
+      } catch (err) {
+        app.log.error(err)
+        return reply.code(204).send()
       }
-    }catch(err) {
-      app.log.error(err)
-      return reply.code(204).send()
-    }}
+    }
     try {
       const stmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
       const row = stmt.get(tile)
