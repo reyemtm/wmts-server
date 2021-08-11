@@ -18,19 +18,48 @@ The WMTS mbtiles-server project is no longer maintained, however the need still 
 
 Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpoints that reads from mbtiles sqlite database files. This is part of a FOSS4G toolchain to enable publishing geospatial data to the web.
 
+## Features
+
+- Tilejson
+- WMTS
+- Map Preview
+- Overzoom 2x for raster tiles, limited to zoom levels above 17
+
+## Requirements
+
+- mbtiles raster tiles must be 256x256
+- mbtiles must have the following metadata 
+
+```JavaScript
+{
+  "name": "name must match the file name, without the extension",
+  "format": "jpg | png | jpeg", //pbf and grid are not tested
+  "minzoom": 0, //min zoom of the tiles,
+  "maxzoom": 21, //max zoom of the tiles, 2x overzoom will be enabled on any tiles with a maxzoom > 16
+  "bounds": [
+    -82.85133361816406,
+    39.55064761909319,
+    -82.36089706420898,
+    39.94935861566368
+  ] //bounds of the tiles
+}
+```
+- NodeJS
+
+
 ## TODO
 
 - [ ] Recreate Licking Tiles
 - [ ] Recreate Pickaway Tiles
+- [ ] Test PBF tiles
+- [ ] Test grid tiles
 
 ## Goals
 
-- [ ] Enhance the tile server raster endpoints to serve enhanced imagery at `z*2` levels beyond that of the native `maxzoom`.
+- [X] Enhance the tile server raster endpoints to serve enhanced imagery at `z*2` levels beyond that of the native `maxzoom`.
 - [ ] Migrate the WMTS endpoints over to the GO project above.
 
 ---
-
-
 
 ## XYZ Routes Inherited from mbtiles-server (Fastify)
 

@@ -9,9 +9,7 @@ const sharp = require("sharp")
 /*CONFIG*/
 const TILESDIR = process.env.TILESDIR || "data" // directory to read mbtiles files
 const HOST = process.env.HOST || 'localhost' // default listen address
-const LOCAL_HOST = process.env.LOCAL_HOST || 'localhost'
 const PORT = process.env.PORT || null
-const LOCAL_PORT = process.env.LOCAL_PORT || 3000 // PORT the server runs on
 const EXPIRES = process.env.EXPIRES || 864000 //60 * 60 * 24 or 48 hours
 const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
 
@@ -27,9 +25,6 @@ const {
   getQuery,
   invalidQuery
 } = require('./lib/utils.js')
-const {
-  format
-} = require('path')
 
 function build(opts = {}) {
 
@@ -55,9 +50,10 @@ function build(opts = {}) {
     const mbtiles = files.filter(f => path.extname(f) === ".mbtiles")
     reply.send(mbtiles.map(file => {
       return {
-        layer: file,
-        tilejson: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.basename(file) + "/tilejson"}`,
-        WMTS: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.basename(file) + "/WMTS"}`
+        layer: path.parse(file).name,
+        tilejson: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/tilejson"}`,
+        WMTS: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/WMTS"}`,
+        preview: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/map"}`,
       }
     }))
   })
@@ -82,13 +78,19 @@ function build(opts = {}) {
     try {
       const db = dbConnector(TILESDIR, database)
       if (!db) throw new Error("Could not connect to database")
-      return dbGetMetadata(db, reply)
+      const metadata = dbGetMetadata(db, reply)
+      if (metadata) {
+        return reply.send(metadata)
+      }else{
+        throw new Error("No metadata found.")
+      }
     } catch (err) {
+      app.log.error("Tilejson Error: " + err)
       return reply.code(404).send(err)
     }
   })
 
-  //--WMTS--
+  /*--WMTS--*/
   // see https://github.com/DenisCarriere/mbtiles-server/blob/master/routes/wmts.js 
 
   app.get('/:database/WMTS/1.0.0/WMTSCapabilities.xml', GetCapabilitiesRESTful)
@@ -98,11 +100,26 @@ function build(opts = {}) {
   app.get('/:database/WMTS', GetCapabilitiesKVP)
   app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+):ext(.jpg|.png|.jpeg|.pbf|)', GetTileRESTful)
 
-  //
-  //TODO turn this into a preview route from the tilejson
+  /*--PREVIEW ROUTES--*/
   app.get("/preview", (req, reply) => {
     const html = fs.readFileSync("./preview/index.html", "utf8");
     reply.type("text/html").send(html)
+  })
+
+  app.get("/:database/map", (req, reply) => {
+    try {
+      const database = dbNormalize(req.params.database);
+      app.log.warn("database")
+      const db = dbConnector(TILESDIR, database);
+      app.log.warn("db")
+      const metadata = dbGetMetadata(db)
+      app.log.warn("meta")
+      const preview = require("./preview/preview.js");
+      reply.type("text/html").send(preview(metadata))
+    }catch(err) {
+      app.log.error("Error with map preview: " + err);
+      reply.status(500).send(err)
+    }
   })
 
   /**
@@ -160,6 +177,7 @@ function build(opts = {}) {
           const y = path.parse(request.params.y).name(1 << z) - 1 - y
           return dbGetTile(db, [z, x, (1 << z) - 1 - y], reply)
         } catch (err) {
+          app.log.error("GetTileKVP Error: " + err)
           return reply.code(404).send(err)
         }
     }
@@ -187,6 +205,7 @@ function build(opts = {}) {
       if (!db) throw new Error("Could not connect to database")
       return dbGetTile(db, [z, x, (1 << z) - 1 - y], reply)
     } catch (err) {
+      app.log.error("GetTileRestful Error: " + err)
       return reply.code(404).send(err)
     }
   }
@@ -219,7 +238,7 @@ function build(opts = {}) {
           url: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${database.replace(".mbtiles", "")}/WMTS`,
           title: metadata.name,
           minzoom: metadata.minzoom,
-          maxzoom: metadata.maxzoom,
+          maxzoom: metadata.maxzoom + 2, //Overzoom option,
           abstract: metadata.description,
           bbox: metadata.bounds,
           format: metadata.format,
@@ -230,6 +249,7 @@ function build(opts = {}) {
       }
     } catch (err) {
       if (err) {
+        app.log.error("mbtilesMedataToXML Error: " + err)
         reply.code(500).send('Error fetching metadata: ' + err + '\n')
       }
     }
@@ -269,6 +289,7 @@ function build(opts = {}) {
       })
       return connection
     } catch (err) {
+      app.log.error("dbConnector error: " + err)
       if (err) return false
     }
   }
@@ -300,18 +321,15 @@ function build(opts = {}) {
   function dbGetTile(db, t, reply) {
     const tile = [Number(t[0]), Number(t[1]), Number(t[2])]
 
-    //TODO make this a fn of max zoom native maxzoom
-    if (tile[0] > 20) {
+    //TODO test to see if the requested tile is a raster or not, probably in the metadata section
+    if (tile[0] > 17) {
       try {
         const getMaxZoom = db.prepare(`SELECT name, value FROM metadata where name = 'maxzoom'`);
         const maxzoom = getMaxZoom.all();
-        if (maxzoom && maxzoom[0].value && Number(maxzoom[0].value) >= 19) {
-          const z = Number(maxzoom[0].value)
-          app.log.warn(maxzoom[0].value)
-          const zF = tile[0] - z;
-          if (zF < 3) {
-
-            app.log.warn("Attempting enable overzoom: " + zF)
+        if (maxzoom && maxzoom[0].value && Number(maxzoom[0].value) >= 17) {
+          const maxNativeZoom = Number(maxzoom[0].value)
+          const zF = tile[0] - maxNativeZoom;
+          if (zF < 3 && zF > 0) {
             const tileClipMatrix = [{
               left: 0,
               top: 256
@@ -325,11 +343,11 @@ function build(opts = {}) {
               left: 0,
               top: 0
             }]
-            const originTile = (tile[0] == 21) ?
+
+            const originTile = (zF === 1) ?
               tilebelt.getParent([tile[1], tile[2], tile[0]]) :
               tilebelt.getParent(tilebelt.getParent([tile[1], tile[2], tile[0]]))
 
-            //works for first order children
             //children of parent of the requested tile
             const children = tilebelt.getChildren(tilebelt.getParent([tile[1], tile[2], tile[0]]))
             const child = [];
@@ -340,7 +358,7 @@ function build(opts = {}) {
 
             let _child = 0,
               requestedParentTile, requestedParentSiblings;
-            if (tile[0] == 22) {
+            if (zF === 2) {
               //parent of the child that we need from above
               requestedParentTile = tilebelt.getParent([tile[1], tile[2], tile[0]]);
 
@@ -359,36 +377,30 @@ function build(opts = {}) {
               const parentTileStmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
               const row = parentTileStmt.get(overZoom.ToTile(originTile))
               if (row) {
-                if (tile[0] == 21) {
+                if (zF === 1) {
                   return sharp(row.tile_data)
                     .resize(512, 512, {
                       kernel: sharp.kernel.lanczos3
                     })
-                    // .sharpen(1)
+                    .extract({
+                      left: tileClipMatrix[child].left,
+                      top: tileClipMatrix[child].top,
+                      width: 256,
+                      height: 256
+                    })
                     .toBuffer()
-                    .then(data => {
-                      return sharp(data)
-                        .extract({
-                          left: tileClipMatrix[child].left,
-                          top: tileClipMatrix[child].top,
-                          width: 256,
-                          height: 256
-                        })
-                        .grayscale()
-                        .toBuffer()
-                        .then(childData => {
-                          Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
-                            reply.header(h[0], h[1])
-                          )
-                          reply.header("X-Powered-By", "OverZoom Beta")
-                          reply.send(childData)
-                        })
+                    .then(childData => {
+                      Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
+                        reply.header(h[0], h[1])
+                      )
+                      reply.header("X-Powered-By", "OverZoom Beta")
+                      reply.send(childData)
                     })
                     .catch(err => {
-                      app.log.error(err)
+                      app.log.error("Error with OverZoom: " + err)
                       reply.code(204).send()
                     })
-                } else if (tile[0] == 22) {
+                } else if (zF === 2) {
                   return sharp(row.tile_data)
                     .resize(512, 512, {
                       kernel: sharp.kernel.lanczos3
@@ -425,7 +437,7 @@ function build(opts = {}) {
                         })
                     })
                     .catch(err => {
-                      app.log.error(err)
+                      app.log.error("Error with OverZoom: " + err)
                       reply.code(204).send()
                     })
                 }
@@ -434,16 +446,13 @@ function build(opts = {}) {
                 return reply.code(500).send()
               }
             } catch (err) {
-              app.log.error(err)
+              app.log.error("Error with OverZoom: " + err)
               return reply.code(204).send()
             }
-            //overzoom.ExpandTile
-            //overzoom.EnhanceTile
-            //overzoom.SplitTile
           }
         }
       } catch (err) {
-        app.log.error(err)
+        app.log.error("Error with OverZoom: " + err)
         return reply.code(204).send()
       }
     }
@@ -456,23 +465,23 @@ function build(opts = {}) {
         )
         reply.send(row.tile_data)
       } else {
-        reply.code(400).send({
-          Error: "tile not found"
-        }) //change to sending blank png tile?
+        app.log.error("getTileError, no data found: ")
+        reply.code(204).send() //change to sending blank png tile?
       }
     } catch (err) {
       if (err) {
+        app.log.error("getTileError, unknown: " + err)
         reply.code(500).send(err) //TODO merge these routes with the original WMTS error handlers //TODO check all error status codes
       }
     }
   }
 
-  function dbGetMetadata(db, reply) {
+  function dbGetMetadata(db) {
     try {
       const stmt = db.prepare(`SELECT name, value FROM metadata where name in ('name', 'attribution','bounds','center', 'description', 'maxzoom', 'minzoom', 'pixel_scale', 'format')`);
       const rows = stmt.all()
       if (!rows) {
-        reply.code(204).send('No metadata present')
+        return null
       } else {
         const metadata = {};
         let format, name;
@@ -486,7 +495,7 @@ function build(opts = {}) {
           }
           metadata[r.name] = value
         })
-        metadata.maxzoom = metadata.maxzoom + 1
+        metadata.maxzoom = metadata.maxzoom
         metadata["scheme"] = "xyz"
         metadata["tilejson"] = "2.1.0"
         metadata["type"] = "overlay"
@@ -494,10 +503,11 @@ function build(opts = {}) {
         metadata["tiles"] = [
           `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${name}/{z}/{x}/{y}.${format}`
         ]
-        reply.send(metadata)
+        return metadata
       }
     } catch (err) {
-      reply.code(404).send(err)
+      app.log.error("getMetadata error: " + err)
+      throw new Error("metadata error")
     }
   }
 

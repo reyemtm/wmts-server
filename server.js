@@ -1,12 +1,12 @@
 require('dotenv').config()
 const LOCAL_HOST = process.env.LOCAL_HOST || 'localhost'
 const LOCAL_PORT = process.env.LOCAL_PORT || 3000 // PORT the server runs on
-
+const LOG_LEVEL = process.env.LOG_LEVEL || "warn"
 const server = require("./app")({
   logger: {
-    enable: false,
+    enable: true,
     prettyPrint: true,
-    level: "warn"
+    level: LOG_LEVEL
   },
   ignoreTrailingSlash: true,
   keepAliveTimeout: process.env.KEEPALIVE || 7200
