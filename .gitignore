@@ -1,6 +1,7 @@
 #custom
 data
 testing
+preview/leaflet.html
 # Logs
 logs
 *.log

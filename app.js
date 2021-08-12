@@ -108,11 +108,11 @@ function build(opts = {}) {
   app.get("/:database/map", (req, reply) => {
     try {
       const database = dbNormalize(req.params.database);
-      app.log.warn("database")
+      // app.log.warn("database")
       const db = dbConnector(TILESDIR, database);
-      app.log.warn("db")
+      // app.log.warn("db")
       const metadata = dbGetMetadata(db)
-      app.log.warn("meta")
+      // app.log.warn("meta")
       const preview = require("./preview/preview.js");
       reply.type("text/html").send(preview(metadata))
     }catch(err) {
@@ -327,6 +327,7 @@ function build(opts = {}) {
           const maxNativeZoom = Number(maxzoom[0].value)
           const zF = tile[0] - maxNativeZoom;
           if (zF < 3 && zF > 0) {
+            app.log.warn("zF: " + zF)
             const tileClipMatrix = [{
               left: 0,
               top: 256
@@ -373,6 +374,10 @@ function build(opts = {}) {
             try {
               const parentTileStmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
               const row = parentTileStmt.get(overZoom.ToTile(originTile))
+              if (!row) {
+                app.log.error("No parentTile found" + originTile)
+                return reply.status(404).send()
+              }
               if (row) {
                 if (zF === 1) {
                   return sharp(row.tile_data)
@@ -395,7 +400,7 @@ function build(opts = {}) {
                     })
                     .catch(err => {
                       app.log.error("Error with OverZoom: " + err)
-                      reply.code(204).send()
+                      return reply.code(204).send()
                     })
                 } else if (zF === 2) {
                   return sharp(row.tile_data)
@@ -424,18 +429,21 @@ function build(opts = {}) {
                           width: 256,
                           height: 256
                         })
+                        // .sharpen(20,0,0)
+                        // .clahe()
+                        // .webp()
                         .toBuffer()
                         .then(childData => {
                           Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
                             reply.header(h[0], h[1])
                           )
                           reply.header("X-Powered-By", "OverZoom Beta")
-                          reply.send(childData)
+                          return reply.send(childData)
                         })
                     })
                     .catch(err => {
                       app.log.error("Error with OverZoom: " + err)
-                      reply.code(204).send()
+                      return reply.code(204).send()
                     })
                 }
               } else {
@@ -458,7 +466,7 @@ function build(opts = {}) {
       const row = stmt.get(tile)
       if (!row) {
         app.log.error("getTileError, no data found: ")
-        reply.code(204).send() //change to sending blank png tile?
+        return reply.code(204).send() //change to sending blank png tile?
       }
       Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
         reply.header(h[0], h[1])
@@ -489,7 +497,8 @@ function build(opts = {}) {
         }
         metadata[r.name] = value
       })
-      metadata.maxzoom = metadata.maxzoom
+      metadata["maxNativeZoom"] = metadata.maxzoom,
+      metadata.maxzoom = metadata.maxzoom + 2,
       metadata["scheme"] = "xyz"
       metadata["tilejson"] = "2.1.0"
       metadata["type"] = "overlay"
