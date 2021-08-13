@@ -12,7 +12,7 @@ const HOST = process.env.HOST || 'localhost' // default listen address
 const PORT = process.env.PORT || null
 const EXPIRES = process.env.EXPIRES || 864000 //60 * 60 * 24 or 48 hours
 const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
-const { overZoom } = require("./lib/overZoom.js")
+const { overZoom, getZoomFactor } = require("./lib/overZoom.js")
 
 /*WMTS*/
 const wmts = require('wmts')
@@ -79,7 +79,7 @@ function build(opts = {}) {
     try {
       const db = dbConnector(TILESDIR, database)
       if (!db) throw new Error("Could not connect to database")
-      const metadata = dbGetMetadata(db, reply)
+      const metadata = dbGetMetadata(db, database)
       if (!metadata) {
         throw new Error("No metadata found.")
       }
@@ -112,13 +112,15 @@ function build(opts = {}) {
       // app.log.warn("database")
       const db = dbConnector(TILESDIR, database);
       // app.log.warn("db")
-      const metadata = dbGetMetadata(db)
+      const metadata = dbGetMetadata(db, database)
       // app.log.warn("meta")
+      let preview;
       if (metadata.format && ["jpg", "jpeg", "png", "webp"].includes(metadata.format)) {
         preview = require("./preview/leaflet-preview.js");
         reply.type("text/html").send(preview(metadata))
       }else{
-        reply.status(500).send({Error: "Missing metadata format or no Preview available."})
+        preview = require("./preview/mapbox-preview.js");
+        reply.type("text/html").send(preview(metadata))
       } 
     }catch(err) {
       app.log.error("Error with map preview: " + err);
@@ -236,13 +238,18 @@ function build(opts = {}) {
             const array = r.value.split(",")
             value = array.reduce((i, v) => [...i, Number(v)], [])
           }
+          if (r.name === "json" && r.value) {
+            const json = JSON.parse(r.value)
+            r.name = "vector_layers"
+            value = json["vector_layers"]
+          }
           metadata[r.name] = value
         })
         const xml = wmts({
           url: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${database.replace(".mbtiles", "")}/WMTS`,
           title: metadata.name,
           minzoom: metadata.minzoom,
-          maxzoom: metadata.maxzoom + 2, //over zoom option,
+          maxzoom: metadata.maxzoom + getZoomFactor(metadata.format), //over zoom option,
           abstract: metadata.description,
           bbox: metadata.bounds,
           format: metadata.format,
@@ -326,9 +333,9 @@ function build(opts = {}) {
     }
   }
 
-  function dbGetMetadata(db) {
+  function dbGetMetadata(db, databaseName) {
     try {
-      const stmt = db.prepare(`SELECT name, value FROM metadata where name in ('name', 'attribution','bounds','center', 'description', 'maxzoom', 'minzoom', 'pixel_scale', 'format')`);
+      const stmt = db.prepare(`SELECT name, value FROM metadata where name in ('name', 'attribution','bounds','center', 'description', 'maxzoom', 'minzoom', 'pixel_scale', 'format', 'json')`);
       const rows = stmt.all()
       if (!rows) {
         return null
@@ -343,16 +350,21 @@ function build(opts = {}) {
           const array = r.value.split(",")
           value = array.reduce((i, v) => [...i, Number(v)], [])
         }
+        if (r.name === "json" && r.value) {
+          const json = JSON.parse(r.value)
+          r.name = "vector_layers"
+          value = json["vector_layers"]
+        }
         metadata[r.name] = value
       })
       metadata["maxNativeZoom"] = metadata.maxzoom,
-      metadata.maxzoom = metadata.maxzoom + 2,
+      metadata.maxzoom = metadata.maxzoom + getZoomFactor(metadata.format),
       metadata["scheme"] = "xyz"
       metadata["tilejson"] = "2.1.0"
       metadata["type"] = "overlay"
       metadata["version"] = "1.1"
       metadata["tiles"] = [
-        `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${name}/{z}/{x}/{y}.${format}`
+        `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${databaseName.replace(".mbtiles", "")}/{z}/{x}/{y}.${format}`
       ]
       return metadata
 

@@ -10,20 +10,20 @@ This project is based on previous work from the following:
 
 ## Why
 
-The WMTS mbtiles-server project is no longer maintained, however the need still exists for a modern WMTS tile server. While working on bringing this functionality to the GO project above, the language barrier was steeper than anticipated so in the meantime I have pieced together a working WMTS tile server for NodeJS.
+The WMTS mbtiles-server project is no longer maintained so this project attempts to bring WMTS functionality to  a tile server that works with a modern version of NodeJS. My initial efforts centered around bringing this functionality to the [mbtileserver (GO)](https://github.com/consbio/mbtileserver) project, but the language barrier was steeper than anticipated. The result is this work-in-progress WMTS tile server for NodeJS with a few added features.
 
-> This is a work in progress and all routes and functions may be changed.
+> NOTE: This is a work in progress and all routes and functions may be changed.
 
 ## Purpose
 
-Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpoints that reads from mbtiles sqlite database files. This is part of a FOSS4G toolchain to enable publishing geospatial data to the web.
+Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpoints that reads from `mbtiles` database files. This is part of larger a Free and OpenSource for GIS toolchain to enable publishing geospatial data to the web.
 
 ## Features
 
-- Tilejson
-- WMTS
+- Tilejson Endpoint
+- WMTS Endpoint (for use in ArcGIS Online)
 - Map Preview
-- Overzoom 2x for raster tiles, limited to zoom levels above 17
+- Overzoom 3x for raster tiles, limited to zoom levels above 17
 
 ## Requirements
 
@@ -32,10 +32,10 @@ Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpo
 
 ```JavaScript
 {
-  "name": "name must match the file name, without the extension",
+  "name": "any name",
   "format": "jpg | png | jpeg", //pbf and grid are not tested
   "minzoom": 0, //min zoom of the tiles,
-  "maxzoom": 21, //max zoom of the tiles, 2x overzoom enabled on any tiles with a maxzoom > 16
+  "maxzoom": 21, //max zoom of the tiles, 3x overzoom enabled on any tiles with a maxzoom > 16
   "bounds": [
     -82.85133361816406,
     39.55064761909319,
@@ -57,7 +57,7 @@ Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpo
 ## Goals
 
 - [ ] Migrate the WMTS endpoints over to the GO project above.
-- [X] Enhance the tile server raster endpoints to serve enhanced imagery at `z*2` levels beyond that of the native `maxzoom`.
+- [X] Enhance the tile server raster endpoints to serve enhanced imagery at `z*3` levels beyond that of the native `maxzoom`.
 
 ---
 

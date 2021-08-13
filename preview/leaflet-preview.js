@@ -1,4 +1,8 @@
+const {getZoomFactor} = require("../lib/overZoom.js");
+
 module.exports = function(metadata) {
+  const zoomFactor = (metadata.format) ? getZoomFactor(metadata.format) : null;
+  
   return /*html*/`
   <!DOCTYPE html>
 <html>
@@ -51,9 +55,9 @@ module.exports = function(metadata) {
         }
       ).addTo(map);
 
-      map.on("contextmenu", (e) => {
+      /*map.on("contextmenu", (e) => {
         console.log(e);
-      });
+      });*/
 
       const go = new L.tileLayer(
         "https://www2.ci.lancaster.oh.us/tileserver/services/2020_fairfield_3in_z21/tiles/{z}/{x}/{y}.jpg",
@@ -80,6 +84,9 @@ module.exports = function(metadata) {
           tms: false,
         }
       );
+
+      const maxNativeZoom = ${metadata.maxNativeZoom};
+
       L.GridLayer.GridDebug = L.GridLayer.extend({
         createTile: function (coords) {
           const tile = document.createElement('div');
@@ -87,7 +94,9 @@ module.exports = function(metadata) {
           tile.style.fontWeight = 'normal';
           tile.style.fontSize = '14pt';
           tile.style.color = '#fff';
-          tile.innerHTML = [coords.z, coords.x, coords.y].join(' / ');
+          tile.innerHTML = (coords.z > maxNativeZoom) ?
+          [coords.z, coords.x, coords.y].join(' / ') + "\\nOverZoom x" + (coords.z - maxNativeZoom)
+          : [coords.z, coords.x, coords.y].join(' / ');
           return tile;
         },
       });
@@ -99,7 +108,7 @@ module.exports = function(metadata) {
       map.addLayer(gridLayer);
       const layerControl = new L.control.layers(
         {
-          ${metadata.name.replace("-", "_").split("_").join(" ").toUpperCase()}: fastify,
+          "${metadata.name.replace("-", "_").split("_").join(" ").toUpperCase()}": fastify,
           Go: go,
           AGOL: agol,
           Error: error
@@ -108,7 +117,8 @@ module.exports = function(metadata) {
         {
           collapsed: false,
         }
-      ).addTo(map);
+      ).addTo(map)
+
       let time = Date.now();
       // map.eachLayer(function (layer) {
       //   if (!layer.on) return;
