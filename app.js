@@ -114,8 +114,12 @@ function build(opts = {}) {
       // app.log.warn("db")
       const metadata = dbGetMetadata(db)
       // app.log.warn("meta")
-      const preview = require("./preview/preview.js");
-      reply.type("text/html").send(preview(metadata))
+      if (metadata.format && ["jpg", "jpeg", "png", "webp"].includes(metadata.format)) {
+        preview = require("./preview/leaflet-preview.js");
+        reply.type("text/html").send(preview(metadata))
+      }else{
+        reply.status(500).send({Error: "Missing metadata format or no Preview available."})
+      } 
     }catch(err) {
       app.log.error("Error with map preview: " + err);
       reply.status(500).send(err)
