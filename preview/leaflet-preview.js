@@ -42,7 +42,7 @@ module.exports = function(metadata) {
       var view = [${(metadata.bounds[1] + metadata.bounds[3])/2}, ${(metadata.bounds[0] + metadata.bounds[2])/2}];
       var map = L.map("map", {
         loadingControl: true,
-        maxZoom: 23
+        maxZoom: ${metadata.maxzoom} + 1
       }).setView(view, ${(metadata.minzoom + metadata.maxzoom)/2})
       var hash = new L.Hash(map);
       const fastify = new L.tileLayer(
@@ -94,7 +94,7 @@ module.exports = function(metadata) {
           tile.style.fontWeight = 'normal';
           tile.style.fontSize = '14pt';
           tile.style.color = '#fff';
-          tile.innerHTML = (coords.z > maxNativeZoom) ?
+          tile.innerHTML = (coords.z > maxNativeZoom && (coords.z - maxNativeZoom) <= ${zoomFactor}) ?
           [coords.z, coords.x, coords.y].join(' / ') + "\\nOverZoom x" + (coords.z - maxNativeZoom)
           : [coords.z, coords.x, coords.y].join(' / ');
           return tile;
