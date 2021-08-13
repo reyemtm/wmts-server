@@ -364,7 +364,7 @@ function build(opts = {}) {
       metadata["type"] = "overlay"
       metadata["version"] = "1.1"
       metadata["tiles"] = [
-        `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${databaseName.replace(".mbtiles", "")}/{z}/{x}/{y}.${format}`
+        `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${databaseName.replace(".mbtiles", "")}/{z}/{x}/{y}${(format) ? "." + format : ""}`
       ]
       return metadata
 
