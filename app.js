@@ -6,7 +6,9 @@ const path = require('path')
 const DB = require("better-sqlite3")
 const tilebelt = require("@mapbox/tilebelt")
 const sharp = require("sharp")
+
 /*CONFIG*/
+//TODO have argv[] be able to override the env variables
 const TILESDIR = process.env.TILESDIR || "data" // directory to read mbtiles files
 const HOST = process.env.HOST || 'localhost' // default listen address
 const PORT = process.env.PORT || null
@@ -75,6 +77,7 @@ function build(opts = {}) {
 
   // MBtiles meta route
   app.get('/:database/tilejson', (request, reply) => {
+    const now = Date.now()
     const database = dbNormalize(request.params.database)
     try {
       const db = dbConnector(TILESDIR, database)
@@ -83,6 +86,7 @@ function build(opts = {}) {
       if (!metadata) {
         throw new Error("No metadata found.")
       }
+      metadata["debug"] = Date.now() - now
       return reply.send(metadata)
     }catch (err) {
       app.log.error("Tilejson Error: " + err)
@@ -366,6 +370,17 @@ function build(opts = {}) {
       metadata["tiles"] = [
         `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${databaseName.replace(".mbtiles", "")}/{z}/{x}/{y}${(format) ? "." + format : ""}`
       ]
+
+      //NOTE attempt to populate missing format value from the buffer type using tiletype
+      if (!metadata.format) {
+        const row = db.prepare('Select * from tiles').get();
+        if (row) {
+          Object.entries(tiletype.headers(row.tile_data)).forEach(h => {
+            if (h[0] === "Content-Type") metadata["format"] = h[1].split("/")[1]
+          })
+        }
+      }
+
       return metadata
 
     } catch (err) {
