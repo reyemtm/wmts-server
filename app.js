@@ -310,17 +310,18 @@ function build(opts = {}) {
   async function dbGetTile(db, t, reply) {
     const tile = t.map(i => Number(i))
 
-    //overZoom function, returns a buffer of the overzoomed tile, returns false, or throws error
-    //try/catch are in the onverZoom function
-    const data = await overZoom(db, tile)
-    if (data) {
-      reply.header("Content-Length", data.buffer.byteLength)
-      reply.header("Content-Type", `image/${data.metadata.format}`)
-      reply.header("X-Powered-By", "OverZoom Beta")
-      return reply.send(data.buffer)
-    }
-
     try {
+      
+      //overZoom function, returns a buffer of the overzoomed tile, returns false, or throws error
+      //try/catch are in the onverZoom function
+      const data = await overZoom(db, tile)
+      if (data) {
+        reply.header("Content-Length", data.buffer.byteLength)
+        reply.header("Content-Type", `image/${data.metadata.format}`)
+        reply.header("X-Powered-By", "OverZoom Beta")
+        return reply.send(data.buffer)
+      }
+
       const stmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
       const row = stmt.get(tile)
       if (!row) {

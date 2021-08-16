@@ -17,6 +17,8 @@
     "wmts": "^2.0.0"
   },
   "devDependencies": {
+    "jimp": "^0.16.1",
+    "replace-color": "^2.3.0",
     "tap": "^15.0.9"
   },
   "scripts": {

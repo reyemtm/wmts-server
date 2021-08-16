@@ -33,6 +33,7 @@ module.exports = function(metadata) {
       #map {
         width: 100%;
         height: 100%;
+        background: lightgray
       }
     </style>
   </head>
@@ -58,6 +59,12 @@ module.exports = function(metadata) {
       /*map.on("contextmenu", (e) => {
         console.log(e);
       });*/
+
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+        maxZoom: ${metadata.maxzoom},
+        maxNativeZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      })
 
       const go = new L.tileLayer(
         "https://www2.ci.lancaster.oh.us/tileserver/services/2020_fairfield_3in_z21/tiles/{z}/{x}/{y}.jpg",
@@ -107,13 +114,14 @@ module.exports = function(metadata) {
       const gridLayer = L.gridLayer.gridDebug()
       map.addLayer(gridLayer);
       const layerControl = new L.control.layers(
+        {"OpenStreetMap": osm},
         {
           "${metadata.name.replace("-", "_").split("_").join(" ").toUpperCase()}": fastify,
           Go: go,
           AGOL: agol,
-          Error: error
+          Error: error,
+          "Grid": gridLayer
         },
-        {"Grid": gridLayer},
         {
           collapsed: false,
         }
