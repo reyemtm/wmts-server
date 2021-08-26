@@ -4,8 +4,6 @@ const fastify = require('fastify')
 const tiletype = require('@mapbox/tiletype')
 const path = require('path')
 const DB = require("better-sqlite3")
-const tilebelt = require("@mapbox/tilebelt")
-const sharp = require("sharp")
 
 /*CONFIG*/
 //TODO have argv[] be able to override the env variables
@@ -14,7 +12,10 @@ const HOST = process.env.HOST || 'localhost' // default listen address
 const PORT = process.env.PORT || null
 const EXPIRES = process.env.EXPIRES || 864000 //60 * 60 * 24 or 48 hours
 const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
-const { overZoom, getZoomFactor } = require("./lib/overZoom.js")
+const {
+  overZoom,
+  getZoomFactor
+} = require("./lib/overZoom.js")
 
 /*WMTS*/
 const wmts = require('wmts')
@@ -88,7 +89,7 @@ function build(opts = {}) {
       }
       metadata["debug"] = Date.now() - now
       return reply.send(metadata)
-    }catch (err) {
+    } catch (err) {
       app.log.error("Tilejson Error: " + err)
       return reply.code(404).send(err)
     }
@@ -96,7 +97,8 @@ function build(opts = {}) {
 
   /*--WMTS--*/
   // see https://github.com/DenisCarriere/mbtiles-server/blob/master/routes/wmts.js 
-
+  app.get('/WMTS', (req, reply) => reply.redirect('/WMTS/1.0.0'))
+  app.get('/WMTS/1.0.0', GetWMTSLayers)
   app.get('/:database/WMTS/1.0.0/WMTSCapabilities.xml', GetCapabilitiesRESTful)
   app.get('/:database/WMTS/tile/1.0.0/:database/:Style/:TileMatrixSet/:z(\\d+)/:y(\\d+)/:x(\\d+)', GetTileRESTful)
   app.get('/:database/WMTS/tile/1.0.0/:database/:Style/:TileMatrixSet/:z(\\d+)/:y(\\d+)/:x(\\d+):ext(.jpg|.png|.jpeg|.pbf|)', GetTileRESTful)
@@ -122,15 +124,33 @@ function build(opts = {}) {
       if (metadata.format && ["jpg", "jpeg", "png", "webp"].includes(metadata.format)) {
         preview = require("./preview/leaflet-preview.js");
         reply.type("text/html").send(preview(metadata))
-      }else{
+      } else {
         preview = require("./preview/mapbox-preview.js");
         reply.type("text/html").send(preview(metadata))
-      } 
-    }catch(err) {
+      }
+    } catch (err) {
       app.log.error("Error with map preview: " + err);
       reply.status(500).send(err)
     }
   })
+
+  /**
+   * GetWMTSLayers
+   * @param {Reqeust} req 
+   * @param {Response} reply 
+   * @returns 
+   */
+  function GetWMTSLayers(req, reply) {
+    const files = fs.readdirSync(TILESDIR);
+    const mbtiles = files.filter(f => path.extname(f) === ".mbtiles")
+    // const layer = database.replace(".mbtiles", "")
+    return mbtilesListMetadataToXML(mbtiles, reply)
+  }
+
+  function mbtilesListMetadataToXML(databases, reply) {
+    // return reply.send(databases)
+    return mbtilesMedataToXML(databases[3], reply)
+  }
 
   /**
    * GetCapabilities RESTful
@@ -311,7 +331,6 @@ function build(opts = {}) {
     const tile = t.map(i => Number(i))
 
     try {
-      
       //overZoom function, returns a buffer of the overzoomed tile, returns false, or throws error
       //try/catch are in the onverZoom function
       const data = await overZoom(db, tile)
@@ -363,8 +382,8 @@ function build(opts = {}) {
         metadata[r.name] = value
       })
       metadata["maxNativeZoom"] = metadata.maxzoom,
-      metadata.maxzoom = metadata.maxzoom + getZoomFactor(metadata.format),
-      metadata["scheme"] = "xyz"
+        metadata.maxzoom = metadata.maxzoom + getZoomFactor(metadata.format),
+          metadata["scheme"] = "xyz"
       metadata["tilejson"] = "2.1.0"
       metadata["type"] = "overlay"
       metadata["version"] = "1.1"
