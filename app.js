@@ -4,12 +4,13 @@ const fastify = require('fastify')
 const tiletype = require('@mapbox/tiletype')
 const path = require('path')
 const DB = require("better-sqlite3")
+const mercator = require("global-mercator")
 
 /*CONFIG*/
 //TODO have argv[] be able to override the env variables
-const TILESDIR = process.env.TILESDIR || "data" // directory to read mbtiles files
-const HOST = process.env.HOST || 'localhost' // default listen address
-const PORT = process.env.PORT || null
+const TILESDIR = process.env.TILESDIR || "tilesets" // directory to read mbtiles files
+const HOST = process.env.HOST || '127.0.0.1' // default listen address
+const PORT = process.env.PORT || 3000
 const EXPIRES = process.env.EXPIRES || 864000 //60 * 60 * 24 or 48 hours
 const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
 const {
@@ -19,7 +20,6 @@ const {
 
 /*WMTS*/
 const wmts = require('wmts')
-// const mercator = require('global-mercator')
 const {
   mbtilesNotFound,
   // invalidTile,
@@ -31,9 +31,8 @@ const {
 } = require('./lib/utils.js')
 
 function build(opts = {}) {
-
   const app = fastify(opts)
-
+  
   // fastify extensions
   app.register(require('fastify-caching'), {
     privacy: 'private',
@@ -50,50 +49,40 @@ function build(opts = {}) {
 
   // MBtiles list
   app.get('/', (request, reply) => {
+    const query = (request.query) ? request.query : null;
     const files = fs.readdirSync(TILESDIR);
     const mbtiles = files.filter(f => path.extname(f) === ".mbtiles")
-    reply.send(mbtiles.map(file => {
+    const layers = mbtiles.map(file => {
       return {
         layer: path.parse(file).name,
         tilejson: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/tilejson"}`,
         WMTS: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/WMTS"}`,
         preview: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/map"}`,
       }
-    }))
+    })
+    if (query && (query.f === "html" || query.format === "html" || query.html === "true")) {
+      reply.type("html").send(require("./preview/index.html.js")(layers))
+    }else{
+      reply.send(layers)
+    }
   })
 
   // XYZ Tile
-  app.get('/:database/:z/:x/:y', (request, reply) => {
-    const database = dbNormalize(request.params.database)
-    try {
-      const db = dbConnector(TILESDIR, database)
-      if (!db) throw new Error("Could not connect to database")
-      const y = path.parse(request.params.y).name;
-      const tile = [request.params.z, request.params.x, (1 << request.params.z) - 1 - y];
-      return dbGetTile(db, tile, reply)
-    } catch (err) {
-      return reply.code(404).send()
-    }
-  })
+  // app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+)', (request, reply) => {
+  //   const database = dbNormalize(request.params.database)
+  //   try {
+  //     const db = dbConnector(TILESDIR, database)
+  //     if (!db) throw new Error("Could not connect to database")
+  //     const y = path.parse(request.params.y).name;
+  //     const tile = [request.params.z, request.params.x, (1 << request.params.z) - 1 - y];
+  //     return dbGetTile(db, tile, reply)
+  //   } catch (err) {
+  //     return reply.code(404).send()
+  //   }
+  // })
 
-  // MBtiles meta route
-  app.get('/:database/tilejson', (request, reply) => {
-    const now = Date.now()
-    const database = dbNormalize(request.params.database)
-    try {
-      const db = dbConnector(TILESDIR, database)
-      if (!db) throw new Error("Could not connect to database")
-      const metadata = dbGetMetadata(db, database)
-      if (!metadata) {
-        throw new Error("No metadata found.")
-      }
-      metadata["debug"] = Date.now() - now
-      return reply.send(metadata)
-    } catch (err) {
-      app.log.error("Tilejson Error: " + err)
-      return reply.code(404).send(err)
-    }
-  })
+  // MBtiles tilejson route
+  app.get('/:database/tilejson', GetTileJSON)
 
   /*--WMTS--*/
   // see https://github.com/DenisCarriere/mbtiles-server/blob/master/routes/wmts.js 
@@ -104,7 +93,8 @@ function build(opts = {}) {
   app.get('/:database/WMTS/tile/1.0.0/:database/:Style/:TileMatrixSet/:z(\\d+)/:y(\\d+)/:x(\\d+):ext(.jpg|.png|.jpeg|.pbf|)', GetTileRESTful)
   app.get('/:database/WMTS/tile/1.0.0', GetTileKVP)
   app.get('/:database/WMTS', GetCapabilitiesKVP)
-  app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+):ext(.jpg|.png|.jpeg|.pbf|)', GetTileRESTful)
+  // app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+):ext(.jpg|.png|.jpeg|.pbf|)', GetTileRESTful)
+  app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+)', GetTileRESTful)
 
   /*--PREVIEW ROUTES--*/
   app.get("/preview", (req, reply) => {
@@ -133,6 +123,28 @@ function build(opts = {}) {
       reply.status(500).send(err)
     }
   })
+
+  /**
+   * 
+   * @param {*} req 
+   * @param {Object} reply 
+   */
+  function GetTileJSON(req, reply) {
+    const now = Date.now()
+    const database = dbNormalize(req.params.database)
+    try {
+      const db = dbConnector(TILESDIR, database)
+      if (!db) throw new Error("Could not connect to database")
+      const metadata = dbGetMetadata(db, database)
+      if (!metadata) {
+        throw new Error("No metadata found.")
+      }
+      return reply.send(metadata)
+    } catch (err) {
+      app.log.error("Tilejson Error: " + err)
+      return reply.code(404).send(err)
+    }
+  }
 
   /**
    * GetWMTSLayers
@@ -199,7 +211,7 @@ function build(opts = {}) {
         if (!tilerow) return invalidQuery(url, layer, database, 'tilerow', reply)
         if (!tilematrix) return invalidQuery(url, layer, database, 'tilematrix', reply)
         if (!fs.existsSync(path.join(TILESDIR, database))) return mbtilesNotFound(url, layer, database, reply)
-        // if (!mercator.validTile(tile)) return invalidTile(url, layer, tile, reply)
+        if (!mercator.validTile(tile)) return invalidTile(url, layer, tile, reply)
 
         try {
           const db = dbConnector(TILESDIR, database)
@@ -220,15 +232,15 @@ function build(opts = {}) {
    * @param {Response} reply
    */
   function GetTileRESTful(req, reply) {
-    const x = Number(req.params.x || req.query.TILECOL)
-    const y = Number(req.params.y || req.query.TILEROW)
-    const z = Number(req.params.z || req.query.TILEMATRIX)
+    const x = req.params.x || req.query.TILECOL
+    const y = path.parse(req.params.y).name || req.query.TILEROW
+    const z = req.params.z || req.query.TILEMATRIX
     const tile = [x, y, z]
     const url = req.url
     const database = dbNormalize(req.params.database)
     const layer = database.replace(".mbtiles", "")
-    if (!fs.existsSync(path.join(TILESDIR, database))) return mbtilesNotFound(url, layer, filepath, res)
-    // if (!mercator.validTile(tile)) return invalidTile(url, layer, tile, reply)
+    // if (!fs.existsSync(path.join(TILESDIR, database))) return mbtilesNotFound(url, layer, filepath, res)
+    if (!mercator.validTile(tile)) return invalidTile(url, layer, tile, reply)
 
     try {
       const db = dbConnector(TILESDIR, database)
@@ -276,7 +288,7 @@ function build(opts = {}) {
           maxzoom: metadata.maxzoom + getZoomFactor(metadata.format), //over zoom option,
           abstract: metadata.description,
           bbox: metadata.bounds,
-          format: metadata.format,
+          format: (metadata.format === "jpg") ? "jpeg" : metadata.format,
           spaces: 2
         })
         reply.type('text/xml');
@@ -344,7 +356,7 @@ function build(opts = {}) {
       const stmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
       const row = stmt.get(tile)
       if (!row) {
-        app.log.error("getTileError, no data found: ")
+        app.log.warn("getTileError, no data found: ")
         return reply.code(204).send() //change to sending blank png tile?
       }
       Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
@@ -358,6 +370,7 @@ function build(opts = {}) {
   }
 
   function dbGetMetadata(db, databaseName) {
+    const now = Date.now()
     try {
       const stmt = db.prepare(`SELECT name, value FROM metadata where name in ('name', 'attribution','bounds','center', 'description', 'maxzoom', 'minzoom', 'pixel_scale', 'format', 'json')`);
       const rows = stmt.all()
@@ -367,7 +380,10 @@ function build(opts = {}) {
       const metadata = {};
       let format, name;
       rows.forEach(r => {
-        if (r.name === "format") format = r.value
+        if (r.name === "format") {
+          format = (r.value === "jpg") ? "jpeg" : r.value
+          r.value = format
+        }
         if (r.name === "name") name = r.value
         let value = (isNaN(r.value)) ? r.value : Number(r.value);
         if (r.value.split(",").length > 1) {
@@ -381,16 +397,22 @@ function build(opts = {}) {
         }
         metadata[r.name] = value
       })
-      metadata["maxNativeZoom"] = metadata.maxzoom,
-        metadata.maxzoom = metadata.maxzoom + getZoomFactor(metadata.format),
-          metadata["scheme"] = "xyz"
+      metadata["maxNativeZoom"] = metadata.maxzoom
+      metadata.maxzoom = metadata.maxzoom + getZoomFactor(format)
+      metadata["scheme"] = "xyz"
       metadata["tilejson"] = "2.1.0"
       metadata["type"] = "overlay"
       metadata["version"] = "1.1"
       metadata["tiles"] = [
         `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${databaseName.replace(".mbtiles", "")}/{z}/{x}/{y}${(format) ? "." + format : ""}`
       ]
-
+      /**
+       * CUSTOM METADATA
+       * */
+      metadata["filename"] = path.parse(databaseName).name
+      metadata["WMTS"] = `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(databaseName).name + "/WMTS"}`
+      metadata["date_accessed"] = timestamp()
+      metadata["debug"] = "Fetched in " + (Date.now() - now) + "ms."
       //NOTE attempt to populate missing format value from the buffer type using tiletype
       if (!metadata.format) {
         const row = db.prepare('Select * from tiles').get();
@@ -399,6 +421,7 @@ function build(opts = {}) {
             if (h[0] === "Content-Type") metadata["format"] = h[1].split("/")[1]
           })
         }
+        metadata.format = (metadata.format === "jpg") ? "jpeg" : metadata.format
       }
 
       return metadata
@@ -413,6 +436,10 @@ function build(opts = {}) {
     return path.extname(name) === '.mbtiles' ? name : name + '.mbtiles';
   }
 
+  function timestamp() {
+    const date = new Date(Date.now())
+    return ((date.getMonth() + 1) / 100 + date.toUTCString() + date / 1e3).replace(/..(..).+?(\d+)\D+(\d+).(\S+).*(...)/, '$3-$1-$2T$4.$5Z');
+  }
   /*--END HELPERS */
 
   return app

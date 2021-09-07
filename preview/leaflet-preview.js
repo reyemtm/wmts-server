@@ -41,11 +41,7 @@ module.exports = function(metadata) {
     <div id="map"></div>
     <script>
       var view = [${(metadata.bounds[1] + metadata.bounds[3])/2}, ${(metadata.bounds[0] + metadata.bounds[2])/2}];
-      var map = L.map("map", {
-        loadingControl: true,
-        maxZoom: ${metadata.maxzoom} + 1
-      }).setView(view, ${(metadata.minzoom + metadata.maxzoom)/2})
-      var hash = new L.Hash(map);
+      
       const fastify = new L.tileLayer(
         "${metadata.tiles}",
         {
@@ -54,11 +50,9 @@ module.exports = function(metadata) {
           tms: false,
           attribution: "served by wmts-server",
         }
-      ).addTo(map);
+      );
 
-      /*map.on("contextmenu", (e) => {
-        console.log(e);
-      });*/
+      const wmts = new L.tileLayer("${metadata.WMTS}/tile/1.0.0/${metadata.filename}/default/GoogleMapsCompatible/{z}/{y}/{x}")                          
 
       const osm = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
         maxZoom: ${metadata.maxzoom},
@@ -66,7 +60,7 @@ module.exports = function(metadata) {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       })
 
-      const go = new L.tileLayer(
+      /*const go = new L.tileLayer(
         "https://www2.ci.lancaster.oh.us/tileserver/services/2020_fairfield_3in_z21/tiles/{z}/{x}/{y}.jpg",
         {
           minZoom: 0,
@@ -82,7 +76,7 @@ module.exports = function(metadata) {
           maxZoom: 22,
           tms: false
         }
-      );
+      );*/
       const error = new L.tileLayer(
         "http://localhost:3000/non_existent_tile/{z}/{x}/{y}",
         {
@@ -112,13 +106,21 @@ module.exports = function(metadata) {
         return new L.GridLayer.GridDebug(opts);
       };
       const gridLayer = L.gridLayer.gridDebug()
-      map.addLayer(gridLayer);
+
+      var map = L.map("map", {
+        loadingControl: true,
+        maxZoom: ${metadata.maxzoom} + 1,
+        layers: [fastify, gridLayer]
+      }).setView(view, ${(metadata.minzoom + metadata.maxzoom)/2})
+      var hash = new L.Hash(map);
+
       const layerControl = new L.control.layers(
         {"OpenStreetMap": osm},
         {
           "${metadata.name.replace("-", "_").split("_").join(" ").toUpperCase()}": fastify,
-          Go: go,
-          AGOL: agol,
+          "${metadata.name.replace("-", "_").split("_").join(" ").toUpperCase()} WMTS": wmts, 
+          //Go: go,
+          //AGOL: agol,
           Error: error,
           "Grid": gridLayer
         },

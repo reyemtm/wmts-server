@@ -23,7 +23,7 @@ Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpo
 - Tilejson Endpoint
 - WMTS Endpoint (for use in ArcGIS Online)
 - Map Preview
-- Overzoom 3x for raster tiles, limited to zoom levels above 17
+- Overzoom 3x for raster tiles
 
 ## Requirements
 
@@ -49,15 +49,14 @@ Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpo
 
 ## TODO
 
-- [ ] Recreate Licking Tiles
-- [ ] Recreate Pickaway Tiles
-- [ ] Test PBF tiles
+- [X] Test PBF tiles
 - [ ] Test grid tiles
 
 ## Goals
 
 - [ ] Migrate the WMTS endpoints over to the GO project above.
 - [X] Enhance the tile server raster endpoints to serve enhanced imagery at `z*3` levels beyond that of the native `maxzoom`.
+- [ ] Get the sharp version working in Docker on Synology - using Jimp for the time being but it is much slower
 
 ---
 

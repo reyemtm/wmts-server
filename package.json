@@ -2,7 +2,7 @@
   "name": "wmts-server",
   "version": "0.1.0",
   "description": "WMTS tile server for NodeJS with XYZ tile support.",
-  "main": "index.js",
+  "main": "server.js",
   "dependencies": {
     "@mapbox/tilebelt": "^1.0.2",
     "@mapbox/tiletype": "^0.3.1",
@@ -13,11 +13,10 @@
     "fastify-cors": "^6.0.2",
     "global-mercator": "^3.1.0",
     "pino-pretty": "^5.1.2",
-    "sharp": "^0.28.3",
+    "sharp": "^0.29.1",
     "wmts": "^2.0.0"
   },
   "devDependencies": {
-    "jimp": "^0.16.1",
     "replace-color": "^2.3.0",
     "tap": "^15.0.9"
   },
