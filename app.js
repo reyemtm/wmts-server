@@ -10,7 +10,7 @@ const mercator = require("global-mercator")
 //TODO have argv[] be able to override the env variables
 const TILESDIR = process.env.TILESDIR || "tilesets" // directory to read mbtiles files
 const HOST = process.env.HOST || '127.0.0.1' // default listen address
-const PORT = process.env.PORT || 3000
+const PORT = process.env.PORT || null
 const EXPIRES = process.env.EXPIRES || 864000 //60 * 60 * 24 or 48 hours
 const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
 const {
