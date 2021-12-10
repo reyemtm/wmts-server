@@ -16,7 +16,7 @@ The WMTS mbtiles-server project is no longer maintained so this project attempts
 
 ## Purpose
 
-Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpoints that reads from `mbtiles` database files. This is part of larger a Free and OpenSource for GIS toolchain to enable publishing geospatial data to the web.
+Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpoints that reads from an `mbtiles` database files. This is part of larger a Free and OpenSource for GIS toolchain for publishing geospatial data to the web.
 
 ## Features
 
@@ -33,7 +33,7 @@ Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpo
 ```JavaScript
 {
   "name": "any name",
-  "format": "jpg | png | jpeg", //pbf and grid are not tested
+  "format": "jpg | png | jpeg | pbf", //grid is not tested
   "minzoom": 0, //min zoom of the tiles,
   "maxzoom": 21, //max zoom of the tiles, 3x overzoom enabled on any tiles with a maxzoom > 16
   "bounds": [
@@ -44,19 +44,15 @@ Create a simple to use, performant tile server in NodeJS with WMTS and XYZ endpo
   ] //bounds of the tiles
 }
 ```
-- NodeJS
-
 
 ## TODO
 
-- [X] Test PBF tiles
 - [ ] Test grid tiles
 
 ## Goals
 
 - [ ] Migrate the WMTS endpoints over to the GO project above.
-- [X] Enhance the tile server raster endpoints to serve enhanced imagery at `z*3` levels beyond that of the native `maxzoom`.
-- [ ] Get the sharp version working in Docker on Synology - using Jimp for the time being but it is much slower
+- [ ] Create a universal Docker version
 
 ---
 

@@ -1,25 +1,25 @@
 require('dotenv').config()
+const DB = require("better-sqlite3")
 const fs = require("fs")
 const fastify = require('fastify')
 const tiletype = require('@mapbox/tiletype')
 const path = require('path')
-const DB = require("better-sqlite3")
 const mercator = require("global-mercator")
+const wmts = require('wmts')
 
-/*CONFIG*/
 //TODO have argv[] be able to override the env variables
 const TILESDIR = process.env.TILESDIR || "tilesets" // directory to read mbtiles files
 const HOST = process.env.HOST || '127.0.0.1' // default listen address
 const PORT = process.env.PORT || null
 const EXPIRES = process.env.EXPIRES || 864000 //60 * 60 * 24 or 48 hours
 const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
+
 const {
   overZoom,
   getZoomFactor
 } = require("./lib/overZoom.js")
 
 /*WMTS*/
-const wmts = require('wmts')
 const {
   mbtilesNotFound,
   // invalidTile,
@@ -30,15 +30,34 @@ const {
   invalidQuery
 } = require('./lib/utils.js')
 
-function build(opts = {}) {
-  const app = fastify(opts)
-  
+function service(opts = {}) {
+  const app = fastify(opts) 
+
   // fastify extensions
   app.register(require('fastify-caching'), {
     privacy: 'private',
     expiresIn: EXPIRES
   })
   app.register(require('fastify-cors'))
+
+  /**
+   * Simple testing of authoriztion for routes
+   * @param {*} request 
+   * @returns 
+   */
+  const apiKeyVerify = async (request) => {
+    // if (request.url != "/") return false
+    return true
+  }
+
+  app.addHook('onRequest', async (request, reply) => {  
+    try {  
+      const authorized = await apiKeyVerify(request);
+      if (!authorized) return reply.status(401).send("Unauthorized")
+    } catch (err) {  
+      reply.send(err)  
+    }  
+  })  
 
   // app.addHook("preHandler", (req, reply, done) => {
   //   app.log.error(req.params)
@@ -60,10 +79,10 @@ function build(opts = {}) {
         preview: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/map"}`,
       }
     })
-    if (query && (query.f === "html" || query.format === "html" || query.html === "true")) {
-      reply.type("html").send(require("./preview/index.html.js")(layers))
-    }else{
+    if (query && (query.f === "json" || query.format === "json" || query.json === "true")) {
       reply.send(layers)
+    }else{
+      reply.type("html").send(require("./templates/index.js")(layers))
     }
   })
 
@@ -97,11 +116,6 @@ function build(opts = {}) {
   app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+)', GetTileRESTful)
 
   /*--PREVIEW ROUTES--*/
-  app.get("/preview", (req, reply) => {
-    const html = fs.readFileSync("./preview/index.html", "utf8");
-    reply.type("text/html").send(html)
-  })
-
   app.get("/:database/map", (req, reply) => {
     try {
       const database = dbNormalize(req.params.database);
@@ -112,10 +126,10 @@ function build(opts = {}) {
       // app.log.warn("meta")
       let preview;
       if (metadata.format && ["jpg", "jpeg", "png", "webp"].includes(metadata.format)) {
-        preview = require("./preview/leaflet-preview.js");
+        preview = require("./templates/leaflet-preview.js");
         reply.type("text/html").send(preview(metadata))
       } else {
-        preview = require("./preview/mapbox-preview.js");
+        preview = require("./templates/mapbox-preview.js");
         reply.type("text/html").send(preview(metadata))
       }
     } catch (err) {
@@ -130,7 +144,6 @@ function build(opts = {}) {
    * @param {Object} reply 
    */
   function GetTileJSON(req, reply) {
-    const now = Date.now()
     const database = dbNormalize(req.params.database)
     try {
       const db = dbConnector(TILESDIR, database)
@@ -238,6 +251,7 @@ function build(opts = {}) {
     const tile = [x, y, z]
     const url = req.url
     const database = dbNormalize(req.params.database)
+
     const layer = database.replace(".mbtiles", "")
     // if (!fs.existsSync(path.join(TILESDIR, database))) return mbtilesNotFound(url, layer, filepath, res)
     if (!mercator.validTile(tile)) return invalidTile(url, layer, tile, reply)
@@ -329,8 +343,7 @@ function build(opts = {}) {
     try {
       if (!fs.existsSync(path.join(dir, database))) throw new Error("database does not exist.")
       const connection = new DB(path.join(dir, database), {
-        readonly: true,
-        fileMustExist: true
+        readonly: true
       })
       return connection
     } catch (err) {
@@ -345,24 +358,36 @@ function build(opts = {}) {
     try {
       //overZoom function, returns a buffer of the overzoomed tile, returns false, or throws error
       //try/catch are in the onverZoom function
-      const data = await overZoom(db, tile)
+      const timer = {
+        now: Date.now(),
+        then: Date.now()
+      }
+      const data = await overZoom(db, tile);
+
       if (data) {
-        reply.header("Content-Length", data.buffer.byteLength)
+        // reply.header("Content-Length", data.buffer.byteLength)
         reply.header("Content-Type", `image/${data.metadata.format}`)
-        reply.header("X-Powered-By", "OverZoom Beta")
+        // reply.header("X-Powered-By", "OverZoom Beta")
         return reply.send(data.buffer)
       }
 
       const stmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?');
       const row = stmt.get(tile)
+
       if (!row) {
-        app.log.warn("getTileError, no data found: ")
-        return reply.code(204).send() //change to sending blank png tile?
+        app.log.warn("getTileError, no data found: ");
+        reply.type("image/png");
+        const emptyPng =
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+        return Buffer.from(emptyPng, "base64");
+        // return reply.code(204).send() //change to sending blank png tile?
       }
       Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
         reply.header(h[0], h[1])
       )
+
       reply.send(row.tile_data)
+
     } catch (err) {
       app.log.error("getTileError, unknown: " + err)
       reply.code(500).send(err) //TODO merge these routes with the original WMTS error handlers //TODO check all error status codes
@@ -446,4 +471,4 @@ function build(opts = {}) {
 
 }
 
-module.exports = build
+module.exports = service
