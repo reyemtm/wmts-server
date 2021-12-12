@@ -86,20 +86,6 @@ function service(opts = {}) {
     }
   })
 
-  // XYZ Tile
-  // app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+)', (request, reply) => {
-  //   const database = dbNormalize(request.params.database)
-  //   try {
-  //     const db = dbConnector(TILESDIR, database)
-  //     if (!db) throw new Error("Could not connect to database")
-  //     const y = path.parse(request.params.y).name;
-  //     const tile = [request.params.z, request.params.x, (1 << request.params.z) - 1 - y];
-  //     return dbGetTile(db, tile, reply)
-  //   } catch (err) {
-  //     return reply.code(404).send()
-  //   }
-  // })
-
   // MBtiles tilejson route
   app.get('/:database/tilejson', GetTileJSON)
 
@@ -119,18 +105,17 @@ function service(opts = {}) {
   app.get("/:database/map", (req, reply) => {
     try {
       const database = dbNormalize(req.params.database);
-      // app.log.warn("database")
       const db = dbConnector(TILESDIR, database);
-      // app.log.warn("db")
       const metadata = dbGetMetadata(db, database)
-      // app.log.warn("meta")
       let preview;
-      if (metadata.format && ["jpg", "jpeg", "png", "webp"].includes(metadata.format)) {
+      if (metadata.format && ["jpg", "jpeg", "png", "webp"].includes(metadata.format.toLowerCase())) {
         preview = require("./templates/leaflet-preview.js");
         reply.type("text/html").send(preview(metadata))
-      } else {
+      } else if (metadata.format && ["pbf", "mvt"].includes(metadata.format.toLowerCase())) {
         preview = require("./templates/mapbox-preview.js");
         reply.type("text/html").send(preview(metadata))
+      } else {
+        reply.status(404).send({error: "Not Found"})
       }
     } catch (err) {
       app.log.error("Error with map preview: " + err);
@@ -149,9 +134,7 @@ function service(opts = {}) {
       const db = dbConnector(TILESDIR, database)
       if (!db) throw new Error("Could not connect to database")
       const metadata = dbGetMetadata(db, database)
-      if (!metadata) {
-        throw new Error("No metadata found.")
-      }
+      if (!metadata) throw new Error("No metadata found.")
       return reply.send(metadata)
     } catch (err) {
       app.log.error("Tilejson Error: " + err)
@@ -165,15 +148,13 @@ function service(opts = {}) {
    * @param {Response} reply 
    * @returns 
    */
-  function GetWMTSLayers(req, reply) {
+  function GetWMTSLayers(reply) {
     const files = fs.readdirSync(TILESDIR);
     const mbtiles = files.filter(f => path.extname(f) === ".mbtiles")
-    // const layer = database.replace(".mbtiles", "")
     return mbtilesListMetadataToXML(mbtiles, reply)
   }
 
   function mbtilesListMetadataToXML(databases, reply) {
-    // return reply.send(databases)
     return mbtilesMedataToXML(databases[3], reply)
   }
 
@@ -185,7 +166,7 @@ function service(opts = {}) {
    */
   function GetCapabilitiesRESTful(req, reply) {
     const database = dbNormalize(req.params.database);
-    const layer = database.replace(".mbtiles", "")
+    const layer = database.replace(".mbtiles", "") //TODO this should read from the metadata
     if (!fs.existsSync(path.join(TILESDIR, database))) return mbtilesNotFound(req.url, layer, database, reply)
     return mbtilesMedataToXML(database, reply)
   }
@@ -276,8 +257,7 @@ function service(opts = {}) {
     try {
       const db = dbConnector(TILESDIR, database)
       if (!db) throw new Error("Could not connect to database")
-      const stmt = db.prepare(`SELECT name, value FROM metadata where name in ('name', 'attribution','bounds','center', 'description', 'maxzoom', 'minzoom', 'pixel_scale', 'format')`);
-      const rows = stmt.all()
+      const rows = db.prepare(`SELECT name, value FROM metadata where name in ('name', 'attribution','bounds','center', 'description', 'maxzoom', 'minzoom', 'pixel_scale', 'format')`).all()
       if (!rows) {
         reply.code(204).send('No metadata present')
       } else {
@@ -376,13 +356,12 @@ function service(opts = {}) {
 
       if (!row) {
         app.log.warn("getTileError, no data found: ");
-        reply.status(204);
+        reply.status(204)
         return
-        reply.type("image/png");
-        const emptyPng =
-          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-        return Buffer.from(emptyPng, "base64");
-        // return reply.code(204).send() //change to sending blank png tile?
+        // reply.type("image/png");
+        // const emptyPng =
+        //   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+        // return Buffer.from(emptyPng, "base64");
       }
       Object.entries(tiletype.headers(row.tile_data)).forEach(h =>
         reply.header(h[0], h[1])

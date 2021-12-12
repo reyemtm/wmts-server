@@ -183,18 +183,6 @@ module.exports = (metadata) => {
         }
         if (format == "pbf") {
           var mapLayers = [];
-          /*[
-            {
-              "id": "background",
-              "type": "background",
-              "paint": {
-                "background-color": "whitesmoke"
-              },
-              "layout": {
-                "visibility": "visible"
-              }
-            }
-          ]*/
           const layersArray = ${JSON.stringify(metadata.vector_layers,0,2)};
 
           if (!layersArray.length) return
@@ -269,22 +257,13 @@ module.exports = (metadata) => {
             });
           }
           console.log(mapLayers);
-          map.setStyle({
-            "version": 8,
-            "name": "blank",
-            "sources": {
-              "openmaptiles": {
-                "type": "vector",
-                "url": ""
-              },
-              'preview': {
-                "type": "vector",
-                "tiles": ["${metadata.tiles}"],
-                "maxzoom": ${metadata.maxzoom}
-              }
-            },
-            "layers": mapLayers
-          });
+          map.addSource("preview", {
+            "type": "vector",
+            "tiles": ["${metadata.tiles}"],
+            "maxzoom": ${metadata.maxzoom}
+          })
+          mapLayers.forEach(l => map.addLayer(l))
+
           // map.addControl(new MapboxInspect({
           //   showInspectMap: true,
           //   showInspectButton: true,
