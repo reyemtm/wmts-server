@@ -376,6 +376,8 @@ function service(opts = {}) {
 
       if (!row) {
         app.log.warn("getTileError, no data found: ");
+        reply.status(204);
+        return
         reply.type("image/png");
         const emptyPng =
           "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";

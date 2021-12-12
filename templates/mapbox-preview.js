@@ -1,5 +1,6 @@
 const {getZoomFactor} = require("../lib/overZoom.js");
 const opengraph = require("./opengraph.js");
+const Style = require("./style.js");
 //${metadata.name.replace("-","_").split("_").join(" ")}
 module.exports = (metadata) => {
   return /*html*/`
@@ -151,6 +152,7 @@ module.exports = (metadata) => {
         container: 'map',
         hash: false,
         attributionControl: true,
+        style: ${JSON.stringify(Style())},
         pitch: 0,
         bearing: 0,
         center: [${(metadata.bounds[0] + metadata.bounds[2])/2}, ${(metadata.bounds[1] + metadata.bounds[3])/2}],
@@ -168,7 +170,9 @@ module.exports = (metadata) => {
         trackUserLocation: true
       }));
 
-      buildMap();
+      map.on("load", () => {
+        buildMap()
+      });
       document.getElementById('zoomlevel').innerHTML = '<pre>Current Zoom Level: '+ (map.getZoom()).toFixed(2) + '</pre>';
 
       function buildMap() {
@@ -178,7 +182,8 @@ module.exports = (metadata) => {
           return
         }
         if (format == "pbf") {
-          var mapLayers = [
+          var mapLayers = [];
+          /*[
             {
               "id": "background",
               "type": "background",
@@ -189,7 +194,7 @@ module.exports = (metadata) => {
                 "visibility": "visible"
               }
             }
-          ];
+          ]*/
           const layersArray = ${JSON.stringify(metadata.vector_layers,0,2)};
 
           if (!layersArray.length) return
