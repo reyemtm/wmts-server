@@ -6,7 +6,7 @@
   "dependencies": {
     "@mapbox/tilebelt": "^1.0.2",
     "@mapbox/tiletype": "^0.3.1",
-    "better-sqlite3": "^7.4.3",
+    "better-sqlite3": "^7.4.5",
     "dotenv": "^10.0.0",
     "fastify": "^3.20.1",
     "fastify-caching": "^6.1.0",
@@ -18,8 +18,7 @@
     "wmts": "^2.0.0"
   },
   "devDependencies": {
-    "replace-color": "^2.3.0",
-    "tap": "^15.0.9"
+    "tap": "^15.1.5"
   },
   "scripts": {
     "start": "node server.js",
