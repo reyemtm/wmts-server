@@ -7,7 +7,8 @@ module.exports = () => {
       "esri": {
         "type": "vector",
         "tiles": ["https://basemaps.arcgis.com/arcgis/rest/services/OpenStreetMap_v2/VectorTileServer/tile/{z}/{y}/{x}.pbf"],
-        "maxzoom": 22
+        "maxzoom": 22,
+        "attribution": "Map data <a href='https://www.openstreetmap.org/copyright' target='_blank'>©OpenStreetMap contributors</a>, Microsoft, Esri Community Maps contributors, <a href='https://www.arcgis.com/home/group.html?id=5e0d56e27d7e4a68955d399ca96c41cb#overview' target='_blank'>Map Style by Esri</a> | <a href='https://stamen.com/contact/' target='_blank'>Stamen</a>"
       }
     },
     "layers": [{
