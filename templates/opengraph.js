@@ -21,10 +21,10 @@ module.exports = (opts) => {
   <meta property="twitter:image" content="${(config.SITE_IMG) ? config.SITE_IMG : `https://${config.HOST}/preview.png`}" />
   <meta property="twitter:site" content="${config.TWITTER}" />` : ''}
   <!-- ADD YOUR OWN FAVICON IF YOU WANT-->
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-  <link rel="manifest" href="/site.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://${config.HOST}/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://${config.HOST}/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="https://${config.HOST}/favicon-16x16.png">
+  <link rel="manifest" href="https://${config.HOST}/site.webmanifest">
   
   <!-- END OPENGRAPH -->
 `
