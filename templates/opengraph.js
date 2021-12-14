@@ -13,11 +13,12 @@ module.exports = (opts) => {
   <meta property="og:url" content="https://${config.HOST}" />
   <meta property="og:type" content="website" />
   <meta property="article:publisher" content="https://${(config.SITE_PUBLISHER) ? config.SITE_PUBLISHER : config.HOST}" />
-  <meta property="og:image" content="${(config.SITE_IMG) ? config.SITE_IMG : 'https://pandemix.netlify.app/pandemix.png'}" />
-  <meta property="og:image:width" content="1600" />
-  <meta property="og:image:height" content="800" />
+  <meta property="og:image" content="${(config.SITE_IMG) ? config.SITE_IMG : `https://${config.HOST}/preview.png`}" />
+  <!-- REPLACE THESE DIMENSIONS WITH THE ACTUAL DIMENSIONS -->
+  <meta property="og:image:width" content="2307" />
+  <meta property="og:image:height" content="1413" />
   ${(config.TWITTER) ? `<meta property="twitter:card" content="summary_large_image" />
-  <meta property="twitter:image" content="${(config.SITE_IMG) ? config.SITE_IMG : 'https://pandemix.netlify.app/pandemix.png'}" />
+  <meta property="twitter:image" content="${(config.SITE_IMG) ? config.SITE_IMG : `https://${config.HOST}/preview.png`}" />
   <meta property="twitter:site" content="${config.TWITTER}" />` : ''}
   <!-- END OPENGRAPH -->
 `

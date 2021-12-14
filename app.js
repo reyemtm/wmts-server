@@ -59,6 +59,10 @@ function service(opts = {}) {
     }  
   })  
 
+  app.register(require('fastify-static'), {
+    root: path.join(__dirname, 'static')
+  })
+
   // app.addHook("preHandler", (req, reply, done) => {
   //   app.log.error(req.params)
   //   done()

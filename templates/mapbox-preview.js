@@ -194,7 +194,7 @@ module.exports = (metadata) => {
               "source": "preview",
               "source-layer": layersArray[l].id,
               "paint": {
-                "fill-color": "#121212",
+                "fill-color": "blue",
                 "fill-outline-color": "orange"
               },
               "layout": {
@@ -245,8 +245,8 @@ module.exports = (metadata) => {
                 "circle-radius": {
                   "stops": [
                     [0,1],
-                    [13, 5],
-                    [19,14]
+                    [13, 3],
+                    [19,10]
                   ]
                 },
                 "circle-color": "orange"
