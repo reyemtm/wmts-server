@@ -10,18 +10,29 @@ return /*html*/`<!DOCTYPE html>
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   ${opengraph()}
-  <link rel="stylesheet" href="/pico.min.css">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
   <style>
     :root {
       --primary: #1e88e5;
     }
+    body {
+      background-image: url(/preview-2.jpg)!important;
+      background-size: cover;
+    }
   </style>
 </head>
-<body>
-  <main class="container">
+<body class="dark-mode">
+  <header class="container">
     <h1>${(config.SITE_TITLE) ? config.SITE_TITLE : "WMTS Server"}</h1>
-    <section id="app">
-      <table role="grid">
+    <p>
+      ${config.SITE_ABOUT}
+    </p>
+  </header>
+  <main class="container">
+    <section id="app" class="container table-responsive">
+      <table role="grid" class="table table-hover">
         <tr>
           <th scope="col">Layer</th>
           <th scope="col">Tilejson</th>
@@ -38,6 +49,13 @@ return /*html*/`<!DOCTYPE html>
       </table>
     </section>
   </main>
+  <footer class="">
+    <div class="container">
+      <div class="container-sm font-weight-light font-size-12 text-muted center">
+        a project by <a href="${config.SITE_AUTHOR_URL}">${config.SITE_AUTHOR_URL_NAME} | ${config.SITE_AUTHOR}</a>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>`
 }

@@ -126,7 +126,7 @@ module.exports = (metadata) => {
       }
       .active {
         font-weight: bolder;
-        color: orange;
+        color: #ffcf00;
       }
       /**/
     </style>
@@ -194,8 +194,8 @@ module.exports = (metadata) => {
               "source": "preview",
               "source-layer": layersArray[l].id,
               "paint": {
-                "fill-color": "blue",
-                "fill-outline-color": "orange"
+                "fill-color": "#25282c",
+                "fill-outline-color": "#ffcf00"
               },
               "layout": {
                   "visibility": "visible",
@@ -203,33 +203,12 @@ module.exports = (metadata) => {
               "filter": ["==", "$type", "Polygon"]
             },
             {
-                "id": layersArray[l].id + "" + 2,
-                "type": "fill-extrusion",
-                "source": "preview",
-                "source-layer": layersArray[l].id,
-                "paint": {
-                  "fill-extrusion-color": "whitesmoke",
-                  "fill-extrusion-height": {
-                    "type": "identity",
-                    "property": "render_height"
-                  },
-                  "fill-extrusion-opacity": 0.5
-                },
-                "layout": {
-                  "visibility": "none",
-                },
-                "filter": ["all",
-                  ["has", "render_height"],
-                  ["==", "$type", "Polygon"]
-                ]
-              },
-            {
               "id": layersArray[l].id + "" + 1,
               "type": "line",
               "source": "preview",
               "source-layer": layersArray[l].id,
               "paint": {
-                "line-color": "orange",
+                "line-color": "#ffcf00",
                 "line-width": 2
               },
               "layout": {
@@ -245,16 +224,38 @@ module.exports = (metadata) => {
                 "circle-radius": {
                   "stops": [
                     [0,1],
-                    [13, 3],
-                    [19,10]
+                    [13, 2],
+                    [19,8]
                   ]
                 },
-                "circle-color": "orange"
+                "circle-color": "#ffcf00"
               },
               "layout": {
                   "visibility": "visible",
                 },
-            });
+            },
+            {
+              "id": layersArray[l].id + "" + 2,
+              "type": "fill-extrusion",
+              "source": "preview",
+              "source-layer": layersArray[l].id,
+              "paint": {
+                "fill-extrusion-color": "whitesmoke",
+                "fill-extrusion-height": {
+                  "type": "identity",
+                  "property": "render_height"
+                },
+                "fill-extrusion-opacity": 0.5
+              },
+              "layout": {
+                "visibility": "none",
+              },
+              "filter": ["all",
+                ["has", "render_height"],
+                ["==", "$type", "Polygon"]
+              ]
+            }
+            );
           }
           console.log(mapLayers);
           map.addSource("preview", {
