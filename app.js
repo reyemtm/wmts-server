@@ -1,18 +1,25 @@
 require('dotenv').config()
+const crypto = require("crypto");
 const DB = require("better-sqlite3")
 const fs = require("fs")
 const fastify = require('fastify')
-const tiletype = require('@mapbox/tiletype')
-const path = require('path')
 const mercator = require("global-mercator")
+const path = require('path')
+const tiletype = require('@mapbox/tiletype')
 const wmts = require('wmts')
 
-//TODO have argv[] be able to override the env variables
 const TILESDIR = process.env.TILESDIR || "tilesets" // directory to read mbtiles files
 const HOST = process.env.HOST || '127.0.0.1' // default listen address
 const PORT = process.env.PORT || null
-const EXPIRES = process.env.EXPIRES || 864000 //60 * 60 * 24 or 48 hours
+const EXPIRES = process.env.EXPIRES || 432000 //60 * 60 * 24 or 48 hours
 const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
+const KEYS = process.env.KEYS && process.env.KEYS.includes(",") ? process.env.KEYS.split(",") : process.env.KEYS ? [process.env.KEYS] : null;
+const COOKIENAME = process.env.COOKIE_NAME || "wmtsServerKey"
+
+// Task List
+//TODO split out raster server
+//TODO split out pbf server minimal setup like mbtiles server tobin bradley or mbview
+//TODO add sequalize feature server
 
 const {
   overZoom,
@@ -31,42 +38,31 @@ const {
 } = require('./lib/utils.js')
 
 function service(opts = {}) {
-  const app = fastify(opts) 
-
-  // fastify extensions
-  app.register(require('fastify-caching'), {
+  const app = fastify(opts)
+  .register(require('fastify-caching'), {
     privacy: 'private',
     expiresIn: EXPIRES
   })
-  app.register(require('fastify-cors'))
-
-  /**
-   * Simple testing of authoriztion for routes
-   * @param {*} request 
-   * @returns 
-   */
-  const apiKeyVerify = async (request) => {
-    // if (request.url != "/") return false
-    return true
-  }
-
-  app.addHook('onRequest', async (request, reply) => {  
-    try {  
-      const authorized = await apiKeyVerify(request);
-      if (!authorized) return reply.status(401).send("Unauthorized")
-    } catch (err) {  
-      reply.send(err)  
-    }  
-  })  
-
-  app.register(require('fastify-static'), {
+  .register(require('fastify-cors'))
+  .register(require('fastify-static'), {
     root: path.join(__dirname, 'static')
   })
+  .register(require('fastify-jwt'), {
+    secret: process.env.SECRET || crypto.randomBytes(20).toString('hex'),
+    cookie: {
+      cookieName: COOKIENAME,
+      signed: false
+    }
+  })
+  .register(require('fastify-cookie'))
 
-  // app.addHook("preHandler", (req, reply, done) => {
-  //   app.log.error(req.params)
-  //   done()
-  // })
+  if (KEYS) {
+    app.register(require("./lib/secureRoutes"), {
+      keys: KEYS,
+      cookieName: COOKIENAME,
+      expires: EXPIRES
+    })
+  }
 
   /*--ROUTES--*/
 

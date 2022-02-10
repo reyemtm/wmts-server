@@ -10,7 +10,7 @@ return /*html*/`<!DOCTYPE html>
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   ${opengraph()}
-  <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
+  <link rel="stylesheet" href="/pico.min.css">
   <style>
     :root {
       --primary: #1e88e5;
@@ -31,7 +31,7 @@ return /*html*/`<!DOCTYPE html>
         ${layers.map(r => {
           return `<tr>${Object.values(r).map(d => {
             return `
-              <td>${(d.includes("http")) ? `<a href="${d}">${d}</a>` : d}</td>
+              <td>${(d.includes("http")) ? `<a href="${d}">Link</a>` : d}</td>
             `
           }).join("")}</tr>`
         }).join("")}
