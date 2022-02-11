@@ -1,4 +1,5 @@
 const fp = require('fastify-plugin');
+const crypto = require("crypto");
 
 module.exports = fp(function (app, options, done) {
 
@@ -44,6 +45,7 @@ module.exports = fp(function (app, options, done) {
 
     //IF COOKIE IS INVALID OR DOES NOT EXIST, CHECK FOR A KEY AND SET A NEW COOKIE   
     const apiKey = (request.query.key) ? request.query.key : request.headers.origin ? request.headers.origin : request.headers.referer ? request.headers.referer : null;
+    console.log(request.headers)
     console.log(apiKey)
     if (!apiKey) return false
 
