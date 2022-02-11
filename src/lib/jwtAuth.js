@@ -31,18 +31,23 @@ module.exports = fp(function (app, options, done) {
 
     //CHECK IF COOKIE EXISTS
     const cookie = request.cookies[options.cookieName] || null;
-    // console.log("has cookie", cookie)
 
     //CHECK IF COOKIE IS VALID
     if (cookie) {
       try {
         app.jwt.verify(cookie)
-        return true
+        app.log.info("valid cookie")
+
+        //CHECK IF THE VALID apiKey INSIDE THE COOKIE MATCHES ONE OF THE ROUTE KEYS
+        const { apiKey } = cookie ? app.jwt.decode(cookie) : null;
+        if (apiKey && routeKeys[0].keys.includes(apiKey)) return true
+        app.log.warn("Valid cookie but does not match route keys!")
+        
       } catch (err) {
         if (err.code && err.code != "FAST_JWT_INVALID_SIGNATURE") {
           throw new Error("unknown token verification error")
         } else {
-          console.log("Token authorization failed!")
+          app.log.warn("Token authorization failed!")
         }
       }
     }
@@ -52,6 +57,7 @@ module.exports = fp(function (app, options, done) {
     const url = rawApiKey && rawApiKey.includes("http") ? new URL(rawApiKey) : null
     const apiKey = url ? url.host : rawApiKey
     // console.log(apiKey)
+
     if (!apiKey) return false
 
     //CHECK IF THE KEY EXISTS IN THE KEY REGISTRY
