@@ -19,14 +19,15 @@
     "global-mercator": "^3.1.0",
     "pino-pretty": "^5.1.2",
     "sharp": "^0.29.1",
+    "tilequery": "^0.3.4",
     "wmts": "^2.0.0"
   },
   "devDependencies": {
-    "tap": "^15.1.5"
+    "tap": "^15.1.6"
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon -e js,css,json,env,ejs server.js",
+    "dev": "nodemon -w . -w .env server.js",
     "test": "tap --reporter=list --watch"
   },
   "repository": "https://github.com/reyemtm/wmts-server",

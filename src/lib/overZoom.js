@@ -174,7 +174,7 @@ const expandAndClipTile = async (tileData, matrix, meta) => {
 }
 
 function getZoomFactor(format) {
-  if (!format || format === "pbf") return 0
+  if (!format || format === "pbf" || format === "mvt") return 0
   return ZOOMFACTOR
 }
 

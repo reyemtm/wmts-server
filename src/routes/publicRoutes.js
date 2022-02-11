@@ -1,13 +1,10 @@
-require('dotenv').config()
 const fs = require("fs");
 const path = require("path");
 
-const TILESDIR = process.env.TILESDIR || "tilesets" // directory to read mbtiles files
-const HOST = process.env.HOST || '127.0.0.1' // default listen address
-const PORT = process.env.PORT || null
-const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
+module.exports = function(app, options, done) {
 
-module.exports = function(app, _, done) {
+  const { TILESDIR, HOST, PORT, PROTOCOL } = options;
+
   app.get('/', (request, reply) => {
     const query = (request.query) ? request.query : null;
     const files = fs.readdirSync(TILESDIR);

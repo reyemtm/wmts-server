@@ -12,22 +12,26 @@ module.exports = fp(function (app, options, done) {
   })
   .register(require('fastify-cookie'))
 
-
   /**
  * Simple testing of authoriztion for routes.
- * This will work when a KEYS environment variable is provided which should be a comma separated list.
- * This variable could be replaced with something more fancy like a db call to get keys.
- * This leaves all routes accessible to those with a key, improvements could include per route authorization.
- * Per route authorization could be done by adding routes to the keys.
+ * Use genKeys.js to create a sample keys file at the root of the project.
  * @param {String} request 
  * @returns 
  */
   const apiKeyURLVerify = async (request, reply) => {
+    
+
+    if (!request.params.database) return true
+    if (!options.keys || !options.keys.length) return true
+
+    const routeKeys = options.keys.filter(k => k.file === request.params.database)
+
     //CHECK IF KEYS EXIST
-    if (!options.keys) return true
+    if (!routeKeys.length) return true
 
     //CHECK IF COOKIE EXISTS
     const cookie = request.cookies[options.cookieName] || null;
+    // console.log("has cookie", cookie)
 
     //CHECK IF COOKIE IS VALID
     if (cookie) {
@@ -44,13 +48,14 @@ module.exports = fp(function (app, options, done) {
     }
 
     //IF COOKIE IS INVALID OR DOES NOT EXIST, CHECK FOR A KEY AND SET A NEW COOKIE   
-    const apiKey = (request.query.key) ? request.query.key : request.headers.origin ? request.headers.origin : request.headers.referer ? request.headers.referer : null;
-    console.log(request.headers)
-    console.log(apiKey)
+    const rawApiKey = (request.query.key) ? request.query.key : request.headers.origin ? request.headers.origin : request.headers.referer ? request.headers.referer : null;
+    const url = rawApiKey && rawApiKey.includes("http") ? new URL(rawApiKey) : null
+    const apiKey = url ? url.host : rawApiKey
+    // console.log(apiKey)
     if (!apiKey) return false
 
     //CHECK IF THE KEY EXISTS IN THE KEY REGISTRY
-    if (apiKey && options.keys.includes(apiKey)) {
+    if (apiKey && routeKeys[0].keys.includes(apiKey)) {
 
       const expireDate = options.exipres || new Date().getTime() + (60 * 60 * 24 * 1000 * 1);
 

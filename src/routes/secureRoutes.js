@@ -1,17 +1,10 @@
 require('dotenv').config()
-const DB = require("better-sqlite3")
 const fs = require("fs")
 const mercator = require("global-mercator")
 const path = require('path')
 const tiletype = require('@mapbox/tiletype')
 const wmts = require('wmts')
-
-const TILESDIR = process.env.TILESDIR || "tilesets" // directory to read mbtiles files
-const HOST = process.env.HOST || '127.0.0.1' // default listen address
-const PORT = process.env.PORT || null
-const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
-const KEYS = process.env.KEYS && process.env.KEYS.includes(",") ? process.env.KEYS.split(",") : process.env.KEYS ? [process.env.KEYS] : null;
-const COOKIENAME = process.env.COOKIE_NAME || "wmtsServerKey"
+const { dbConnector, GetTileJSON, dbGetMetadata } = require("../lib/dbConnector");
 
 // Task List
 //TODO split out raster server
@@ -35,7 +28,10 @@ const {
   invalidQuery
 } = require('../lib/utils.js')
 
-module.exports = function(app, _, done) {
+module.exports = function(app, options, done) {
+
+  const { COOKIENAME, KEYS, TILESDIR, HOST, PORT, PROTOCOL } = options;
+
 
   //protect route if keys exist
   app.register(require("../lib/jwtAuth"), {
@@ -45,7 +41,7 @@ module.exports = function(app, _, done) {
 
   // see https://github.com/DenisCarriere/mbtiles-server/blob/master/routes/wmts.js 
 
-  app.get('/:database/tilejson', GetTileJSON)
+  app.get('/:database/tilejson', GetTileJSONRoute)
   app.get('/WMTS', (req, reply) => reply.redirect('/WMTS/1.0.0'))
   app.get('/WMTS/1.0.0', GetWMTSLayers)
   app.get('/:database/WMTS/1.0.0/WMTSCapabilities.xml', GetCapabilitiesRESTful)
@@ -57,9 +53,8 @@ module.exports = function(app, _, done) {
   app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+)', GetTileRESTful)
   app.get("/:database/map", (req, reply) => {
     try {
-      const database = dbNormalize(req.params.database);
-      const db = dbConnector(TILESDIR, database);
-      const metadata = dbGetMetadata(db, database)
+      const db = dbConnector(TILESDIR, req.params.database);
+      const metadata = dbGetMetadata(db, req.params.database)
       let preview;
       if (metadata.format && ["jpg", "jpeg", "png", "webp"].includes(metadata.format.toLowerCase())) {
         preview = require("../templates/leaflet-preview.js");
@@ -76,22 +71,12 @@ module.exports = function(app, _, done) {
     }
   })
 
-  /**
-   * 
-   * @param {*} req 
-   * @param {Object} reply 
-   */
-  function GetTileJSON(req, reply) {
-    const database = dbNormalize(req.params.database)
-    try {
-      const db = dbConnector(TILESDIR, database)
-      if (!db) throw new Error("Could not connect to database")
-      const metadata = dbGetMetadata(db, database)
-      if (!metadata) throw new Error("No metadata found.")
-      return reply.send(metadata)
-    } catch (err) {
-      app.log.error("Tilejson Error: " + err)
-      return reply.code(404).send(err)
+  function GetTileJSONRoute (req, reply) {
+    const metadata = GetTileJSON(TILESDIR, req.params.database);
+    if (!metadata.error) {
+      reply.send(metadata)
+    }else{
+      reply.status(404).send(metadata)
     }
   }
 
@@ -118,7 +103,7 @@ module.exports = function(app, _, done) {
    * @param {Response} reply
    */
   function GetCapabilitiesRESTful(req, reply) {
-    const database = dbNormalize(req.params.database);
+    const database = req.params.database;
     const layer = database.replace(".mbtiles", "") //TODO this should read from the metadata
     if (!fs.existsSync(path.join(TILESDIR, database))) return mbtilesNotFound(req.url, layer, database, reply)
     return mbtilesMedataToXML(database, reply)
@@ -146,7 +131,7 @@ module.exports = function(app, _, done) {
     const z = Number(tilematrix)
     const tile = [x, y, z]
     const url = req.url
-    const database = dbNormalize(req.params.database)
+    const database = req.params.database;
     const layer = database.replace(".mbtiles", "")
 
     switch (request) {
@@ -167,7 +152,7 @@ module.exports = function(app, _, done) {
           return dbGetTile(db, [z, x, (1 << z) - 1 - y], reply)
         } catch (err) {
           app.log.error("GetTileKVP Error: " + err)
-          return reply.code(404).send(err)
+          return reply.status(404).send(err)
         }
     }
   }
@@ -184,7 +169,7 @@ module.exports = function(app, _, done) {
     const z = req.params.z || req.query.TILEMATRIX
     const tile = [x, y, z]
     const url = req.url
-    const database = dbNormalize(req.params.database)
+    const database = req.params.database;
 
     const layer = database.replace(".mbtiles", "")
     // if (!fs.existsSync(path.join(TILESDIR, database))) return mbtilesNotFound(url, layer, filepath, res)
@@ -196,7 +181,7 @@ module.exports = function(app, _, done) {
       return dbGetTile(db, [z, x, (1 << z) - 1 - y], reply)
     } catch (err) {
       app.log.error("GetTileRestful Error: " + err)
-      return reply.code(404).send(err)
+      return reply.status(404).send(err)
     }
   }
 
@@ -212,7 +197,7 @@ module.exports = function(app, _, done) {
       if (!db) throw new Error("Could not connect to database")
       const rows = db.prepare(`SELECT name, value FROM metadata where name in ('name', 'attribution','bounds','center', 'description', 'maxzoom', 'minzoom', 'pixel_scale', 'format')`).all()
       if (!rows) {
-        reply.code(204).send('No metadata present')
+        reply.status(204).send('No metadata present')
       } else {
         const metadata = {};
         rows.forEach(r => {
@@ -243,12 +228,12 @@ module.exports = function(app, _, done) {
       }
     } catch (err) {
       app.log.error("mbtilesMedataToXML Error: " + err)
-      reply.code(500).send('Error fetching metadata: ' + err + '\n')
+      reply.status(500).send('Error fetching metadata: ' + err + '\n')
     }
   }
 
   function GetCapabilitiesKVP(req, reply) {
-    const db = dbNormalize(req.params.database)
+    const db = req.params.database
     // const url = req.url
 
     const {
@@ -271,19 +256,6 @@ module.exports = function(app, _, done) {
   /*--END WMTS--*/
 
   /*--HELPERS--*/
-
-  function dbConnector(dir, database) {
-    try {
-      if (!fs.existsSync(path.join(dir, database))) throw new Error("database does not exist.")
-      const connection = new DB(path.join(dir, database), {
-        readonly: true
-      })
-      return connection
-    } catch (err) {
-      app.log.error("dbConnector error: " + err)
-      return false
-    }
-  }
 
   async function dbGetTile(db, t, reply) {
     const tile = t.map(i => Number(i))
@@ -324,81 +296,10 @@ module.exports = function(app, _, done) {
 
     } catch (err) {
       app.log.error("getTileError, unknown: " + err)
-      reply.code(500).send(err) //TODO merge these routes with the original WMTS error handlers //TODO check all error status codes
+      reply.status(500).send(err) //TODO merge these routes with the original WMTS error handlers //TODO check all error status codes
     }
   }
 
-  function dbGetMetadata(db, databaseName) {
-    const now = Date.now()
-    try {
-      const stmt = db.prepare(`SELECT name, value FROM metadata where name in ('name', 'attribution','bounds','center', 'description', 'maxzoom', 'minzoom', 'pixel_scale', 'format', 'json')`);
-      const rows = stmt.all()
-      if (!rows) {
-        return null
-      }
-      const metadata = {};
-      let format, name;
-      rows.forEach(r => {
-        if (r.name === "format") {
-          format = (r.value === "jpg") ? "jpeg" : r.value
-          r.value = format
-        }
-        if (r.name === "name") name = r.value
-        let value = (isNaN(r.value)) ? r.value : Number(r.value);
-        if (r.value.split(",").length > 1) {
-          const array = r.value.split(",")
-          value = array.reduce((i, v) => [...i, Number(v)], [])
-        }
-        if (r.name === "json" && r.value) {
-          const json = JSON.parse(r.value)
-          r.name = "vector_layers"
-          value = json["vector_layers"]
-        }
-        metadata[r.name] = value
-      })
-      metadata["maxNativeZoom"] = metadata.maxzoom
-      metadata.maxzoom = metadata.maxzoom + getZoomFactor(format)
-      metadata["scheme"] = "xyz"
-      metadata["tilejson"] = "2.1.0"
-      metadata["type"] = "overlay"
-      metadata["version"] = "1.1"
-      metadata["tiles"] = [
-        `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}` : ""}/${databaseName.replace(".mbtiles", "")}/{z}/{x}/{y}${(format) ? "." + format : ""}`
-      ]
-      /**
-       * CUSTOM METADATA
-       * */
-      metadata["filename"] = path.parse(databaseName).name
-      metadata["WMTS"] = `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}` : ""}/${path.parse(databaseName).name + "/WMTS"}`
-      metadata["date_accessed"] = timestamp()
-      metadata["debug"] = "Fetched in " + (Date.now() - now) + "ms."
-      //NOTE attempt to populate missing format value from the buffer type using tiletype
-      if (!metadata.format) {
-        const row = db.prepare('Select * from tiles').get();
-        if (row) {
-          Object.entries(tiletype.headers(row.tile_data)).forEach(h => {
-            if (h[0] === "Content-Type") metadata["format"] = h[1].split("/")[1]
-          })
-        }
-        metadata.format = (metadata.format === "jpg") ? "jpeg" : metadata.format
-      }
-
-      return metadata
-
-    } catch (err) {
-      app.log.error("getMetadata error: " + err)
-      throw new Error("metadata error")
-    }
-  }
-
-  function dbNormalize(name) {
-    return path.extname(name) === '.mbtiles' ? name : name + '.mbtiles';
-  }
-
-  function timestamp() {
-    const date = new Date(Date.now())
-    return ((date.getMonth() + 1) / 100 + date.toUTCString() + date / 1e3).replace(/..(..).+?(\d+)\D+(\d+).(\S+).*(...)/, '$3-$1-$2T$4.$5Z');
-  }
   /*--END HELPERS */
   done()
 
