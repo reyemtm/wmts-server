@@ -1,9 +1,17 @@
-// app.addHook("preHandler", (req, reply, done) => {
-//   app.log.error(req.params)
-//   done()
-// })
-const fp = require('fastify-plugin')
+const fp = require('fastify-plugin');
+
 module.exports = fp(function (app, options, done) {
+
+  app.register(require('fastify-jwt'), {
+    secret: process.env.SECRET || crypto.randomBytes(20).toString('hex'),
+    cookie: {
+      cookieName: options.cookieName,
+      signed: false
+    }
+  })
+  .register(require('fastify-cookie'))
+
+
   /**
  * Simple testing of authoriztion for routes.
  * This will work when a KEYS environment variable is provided which should be a comma separated list.
@@ -35,7 +43,8 @@ module.exports = fp(function (app, options, done) {
     }
 
     //IF COOKIE IS INVALID OR DOES NOT EXIST, CHECK FOR A KEY AND SET A NEW COOKIE   
-    const apiKey = (request.query.key) ? request.query.key : request.hostname;
+    const apiKey = (request.query.key) ? request.query.key : request.headers.origin ? request.headers.origin : request.headers.referer ? request.headers.referer : null;
+    console.log(apiKey)
     if (!apiKey) return false
 
     //CHECK IF THE KEY EXISTS IN THE KEY REGISTRY

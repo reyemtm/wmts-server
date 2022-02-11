@@ -4,7 +4,7 @@ const LOCAL_PORT = process.env.LOCAL_PORT || 3000 // PORT the server runs on
 const LOG_LEVEL = process.env.LOG_LEVEL || "error"
 const HOST = process.env.HOST || "localhost"
 
-const server = require("./app")({
+const server = require("./src/app")({
   logger: {
     enable: true,
     prettyPrint: true,

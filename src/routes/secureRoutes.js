@@ -1,8 +1,6 @@
 require('dotenv').config()
-const crypto = require("crypto");
 const DB = require("better-sqlite3")
 const fs = require("fs")
-const fastify = require('fastify')
 const mercator = require("global-mercator")
 const path = require('path')
 const tiletype = require('@mapbox/tiletype')
@@ -11,7 +9,6 @@ const wmts = require('wmts')
 const TILESDIR = process.env.TILESDIR || "tilesets" // directory to read mbtiles files
 const HOST = process.env.HOST || '127.0.0.1' // default listen address
 const PORT = process.env.PORT || null
-const EXPIRES = process.env.EXPIRES || 432000 //60 * 60 * 24 or 48 hours
 const PROTOCOL = process.env.PROTOCOL || "http" //TODO pull this from the proxied http headers
 const KEYS = process.env.KEYS && process.env.KEYS.includes(",") ? process.env.KEYS.split(",") : process.env.KEYS ? [process.env.KEYS] : null;
 const COOKIENAME = process.env.COOKIE_NAME || "wmtsServerKey"
@@ -24,7 +21,8 @@ const COOKIENAME = process.env.COOKIE_NAME || "wmtsServerKey"
 const {
   overZoom,
   getZoomFactor
-} = require("./lib/overZoom.js")
+} = require("../lib/overZoom.js")
+
 
 /*WMTS*/
 const {
@@ -35,62 +33,19 @@ const {
   invalidService,
   getQuery,
   invalidQuery
-} = require('./lib/utils.js')
+} = require('../lib/utils.js')
 
-function service(opts = {}) {
-  const app = fastify(opts)
-  .register(require('fastify-caching'), {
-    privacy: 'private',
-    expiresIn: EXPIRES
-  })
-  .register(require('fastify-cors'))
-  .register(require('fastify-static'), {
-    root: path.join(__dirname, 'static')
-  })
-  .register(require('fastify-jwt'), {
-    secret: process.env.SECRET || crypto.randomBytes(20).toString('hex'),
-    cookie: {
-      cookieName: COOKIENAME,
-      signed: false
-    }
-  })
-  .register(require('fastify-cookie'))
+module.exports = function(app, _, done) {
 
-  if (KEYS) {
-    app.register(require("./lib/secureRoutes"), {
-      keys: KEYS,
-      cookieName: COOKIENAME,
-      expires: EXPIRES
-    })
-  }
-
-  /*--ROUTES--*/
-
-  // MBtiles list
-  app.get('/', (request, reply) => {
-    const query = (request.query) ? request.query : null;
-    const files = fs.readdirSync(TILESDIR);
-    const mbtiles = files.filter(f => path.extname(f) === ".mbtiles")
-    const layers = mbtiles.map(file => {
-      return {
-        layer: path.parse(file).name,
-        tilejson: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/tilejson"}`,
-        WMTS: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/WMTS"}`,
-        preview: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(file).name + "/map"}`,
-      }
-    })
-    if (query && (query.f === "json" || query.format === "json" || query.json === "true")) {
-      reply.send(layers)
-    }else{
-      reply.type("html").send(require("./templates/index.js")(layers))
-    }
+  //protect route if keys exist
+  app.register(require("../lib/jwtAuth"), {
+    keys: KEYS,
+    cookieName: COOKIENAME
   })
 
-  // MBtiles tilejson route
-  app.get('/:database/tilejson', GetTileJSON)
-
-  /*--WMTS--*/
   // see https://github.com/DenisCarriere/mbtiles-server/blob/master/routes/wmts.js 
+
+  app.get('/:database/tilejson', GetTileJSON)
   app.get('/WMTS', (req, reply) => reply.redirect('/WMTS/1.0.0'))
   app.get('/WMTS/1.0.0', GetWMTSLayers)
   app.get('/:database/WMTS/1.0.0/WMTSCapabilities.xml', GetCapabilitiesRESTful)
@@ -100,8 +55,6 @@ function service(opts = {}) {
   app.get('/:database/WMTS', GetCapabilitiesKVP)
   // app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+):ext(.jpg|.png|.jpeg|.pbf|)', GetTileRESTful)
   app.get('/:database/:z(\\d+)/:x(\\d+)/:y(\\d+)', GetTileRESTful)
-
-  /*--PREVIEW ROUTES--*/
   app.get("/:database/map", (req, reply) => {
     try {
       const database = dbNormalize(req.params.database);
@@ -109,13 +62,13 @@ function service(opts = {}) {
       const metadata = dbGetMetadata(db, database)
       let preview;
       if (metadata.format && ["jpg", "jpeg", "png", "webp"].includes(metadata.format.toLowerCase())) {
-        preview = require("./templates/leaflet-preview.js");
+        preview = require("../templates/leaflet-preview.js");
         reply.type("text/html").send(preview(metadata))
       } else if (metadata.format && ["pbf", "mvt"].includes(metadata.format.toLowerCase())) {
-        preview = require("./templates/mapbox-preview.js");
+        preview = require("../templates/mapbox-preview.js");
         reply.type("text/html").send(preview(metadata))
       } else {
-        reply.status(404).send({error: "Not Found"})
+        reply.status(404).send({ error: "Not Found" })
       }
     } catch (err) {
       app.log.error("Error with map preview: " + err);
@@ -276,7 +229,7 @@ function service(opts = {}) {
           metadata[r.name] = value
         })
         const xml = wmts({
-          url: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${database.replace(".mbtiles", "")}/WMTS`,
+          url: `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}` : ""}/${database.replace(".mbtiles", "")}/WMTS`,
           title: metadata.name,
           minzoom: metadata.minzoom,
           maxzoom: metadata.maxzoom + getZoomFactor(metadata.format), //over zoom option,
@@ -410,13 +363,13 @@ function service(opts = {}) {
       metadata["type"] = "overlay"
       metadata["version"] = "1.1"
       metadata["tiles"] = [
-        `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${databaseName.replace(".mbtiles", "")}/{z}/{x}/{y}${(format) ? "." + format : ""}`
+        `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}` : ""}/${databaseName.replace(".mbtiles", "")}/{z}/{x}/{y}${(format) ? "." + format : ""}`
       ]
       /**
        * CUSTOM METADATA
        * */
       metadata["filename"] = path.parse(databaseName).name
-      metadata["WMTS"] = `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}`:""}/${path.parse(databaseName).name + "/WMTS"}`
+      metadata["WMTS"] = `${PROTOCOL}://${HOST}${(PORT) ? `:${PORT}` : ""}/${path.parse(databaseName).name + "/WMTS"}`
       metadata["date_accessed"] = timestamp()
       metadata["debug"] = "Fetched in " + (Date.now() - now) + "ms."
       //NOTE attempt to populate missing format value from the buffer type using tiletype
@@ -447,9 +400,6 @@ function service(opts = {}) {
     return ((date.getMonth() + 1) / 100 + date.toUTCString() + date / 1e3).replace(/..(..).+?(\d+)\D+(\d+).(\S+).*(...)/, '$3-$1-$2T$4.$5Z');
   }
   /*--END HELPERS */
-
-  return app
+  done()
 
 }
-
-module.exports = service

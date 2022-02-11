@@ -55,7 +55,21 @@ const getTileMatrixPosition = (position) => {
   top: 0
   }]
 
-  return tileClipMatrix[position]
+const tileClipMatrix2 = [{
+  left: 0,
+  top: 128
+}, {
+  left: 128,
+  top: 128
+}, {
+  left: 128,
+  top: 0
+}, {
+  left: 0,
+  top: 0
+  }]
+
+  return tileClipMatrix2[position]
 }
 
 const getOriginTile = (zoomFactor, t) => {
@@ -137,14 +151,17 @@ const expandAndClipTile = async (tileData, matrix, meta) => {
   
   // SHARP method, up to 10x faster than jimp but I cannot get the docker image with sharp to run on Synology
   const buffer = await sharp(tileData)
-  .resize(512, 512, {
-    kernel: sharp.kernel.lanczos3
-  })
+  // .resize(512, 512, {
+  //   kernel: sharp.kernel.lanczos3
+  // })
   .extract({
     left: matrix.left,
     top: matrix.top,
-    width: 256,
-    height: 256
+    width: 128,
+    height: 128
+  })
+  .resize(256, 256, {
+    kernel: sharp.kernel.lanczos3
   })
   .toFormat(metadata.format, {
     // quality: 75,
@@ -171,9 +188,6 @@ function getZoomFactor(format) {
  */
 async function overZoom(db, t) {
   
-  
-
-
   const tile = t.slice();
   // if (tile[0] < 18) return false
   
@@ -184,10 +198,6 @@ async function overZoom(db, t) {
   if (zoomFactor > (ZOOMFACTOR) || zoomFactor < 1) return false
   
   const originTile = getOriginTile(zoomFactor, tile);
-
-  const tileClipMatrix = getTileClipMatrix(toMercatorTile(tile))
-  const parentClipMatrix = getTileClipMatrix(tilebelt.getParent(toMercatorTile(tile)));
-  const grandparentClipMatrix = getTileClipMatrix(tilebelt.getParent(tilebelt.getParent(toMercatorTile(tile))));
 
   const tcx = []
 
